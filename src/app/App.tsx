@@ -1,29 +1,52 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Send, Smartphone, Tablet, Monitor, Sparkles, MoreHorizontal,
   RefreshCw, Code2, Zap, ImageIcon, X, ChevronDown,
   Plus, Upload, FileText, Brain, Bot, Cpu, Undo2, Redo2,
   Globe, Copy, Download, Eye, Check, Settings, RotateCcw,
-  Plug, Archive, GripVertical, Play, FolderOpen, Save, Pencil, Trash2,
-  Bell,
+  Plug, Archive, GripVertical, Play,
+  Moon, BookOpen, Heart, Wind, Flame, Star,
+  Bell, TrendingUp,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, LineChart, Line, Area, AreaChart } from "recharts";
 import logoLotus from "@/imports/logo_lotus.png";
-import { DraggableGeneratedPreview, PreviewBrief } from "./components/GeneratedPreview";
-import {
-  DEFAULT_PROMPT,
-  DEVICE_PREVIEW_META,
-  STYLE_PACK_COUNT,
-  createStylePack,
-  generateAppSpec,
-  generateCodeFiles,
-  hashText,
-  type BuildStatus,
-  type DeviceMode,
-  type GeneratedCodeFile,
-} from "./lib/generator";
+
+// ─── Unsplash image URLs ──────────────────────────────────────────────────────
+const IMG = {
+  // Wellness
+  meditation: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&h=400&fit=crop&auto=format",
+  avatar:     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop&auto=format",
+  journal:    "https://images.unsplash.com/photo-1579017308347-e53e0d2fc5e9?w=400&h=260&fit=crop&auto=format",
+  night:      "https://images.unsplash.com/photo-1616331027398-43237406dcb4?w=600&h=300&fit=crop&auto=format",
+  // Shop
+  shopHero:   "https://images.unsplash.com/photo-1539278383962-a7774385fa02?w=600&h=340&fit=crop&auto=format",
+  shopBag:    "https://images.unsplash.com/photo-1727407209320-1fa6ae60ee05?w=300&h=300&fit=crop&auto=format",
+  // Social
+  socialPost1:"https://images.unsplash.com/photo-1724862936518-ae7fcfc052c1?w=400&h=400&fit=crop&auto=format",
+  socialPost2:"https://images.unsplash.com/photo-1611926653458-09294b3142bf?w=400&h=400&fit=crop&auto=format",
+  socialPost3:"https://images.unsplash.com/photo-1683721003111-070bcc053d8b?w=400&h=400&fit=crop&auto=format",
+  // Finance
+  financeHero:"https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&h=300&fit=crop&auto=format",
+  // Food
+  foodHero:   "https://images.unsplash.com/photo-1770334597607-793046ac75d1?w=600&h=340&fit=crop&auto=format",
+  foodCity:   "https://images.unsplash.com/photo-1770273502690-8225cfb81790?w=400&h=220&fit=crop&auto=format",
+  // Fitness
+  fitRun:     "https://images.unsplash.com/photo-1480179087180-d9f0ec044897?w=600&h=340&fit=crop&auto=format",
+  fitGym:     "https://images.unsplash.com/photo-1518622358385-8ea7d0794bf6?w=400&h=220&fit=crop&auto=format",
+  // Music
+  musicDark:  "https://images.unsplash.com/photo-1723912628184-dfde150fab82?w=600&h=600&fit=crop&auto=format",
+  musicNeon:  "https://images.unsplash.com/photo-1655929947488-862b3b2f6f67?w=400&h=400&fit=crop&auto=format",
+  // Travel
+  travelMtn:  "https://images.unsplash.com/photo-1512629187662-0c4700e84c33?w=600&h=340&fit=crop&auto=format",
+  travelBall: "https://images.unsplash.com/photo-1779361842697-37175264f859?w=400&h=300&fit=crop&auto=format",
+  // Real Estate
+  homeRoom:   "https://images.unsplash.com/photo-1638885930125-85350348d266?w=600&h=340&fit=crop&auto=format",
+  homeSofa:   "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=400&h=280&fit=crop&auto=format",
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+type DeviceMode = "phone" | "tablet" | "desktop";
 type BuildView  = "preview" | "code" | "deployed";
 
 interface ChatMessage { id: string; role: "user" | "assistant"; content: string; ts: Date; }
@@ -31,17 +54,6 @@ interface UploadedFile { id: string; name: string; type: "file" | "image"; mime:
 interface ToggleItem   { id: string; name: string; desc: string; on: boolean; }
 interface Connector    { id: string; name: string; desc: string; connected: boolean; }
 interface Capability   { id: string; name: string; desc: string; category: string; active: boolean; }
-interface ProjectFolder { id: string; name: string; color: string; }
-interface BuilderProject {
-  id: string;
-  name: string;
-  folderId: string;
-  prompt: string;
-  styleSeed: number;
-  updatedAt: Date;
-  savedAt: Date;
-  pinned?: boolean;
-}
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const MODELS = ["Enigma Auto", "GPT-4.1", "Claude Sonnet", "Claude Opus", "Gemini Pro", "DeepSeek Coder", "Local Model"];
@@ -128,6 +140,15 @@ const INIT_CAPS: Capability[] = [
   { id:"ai7",name:"Workflow Automation",category:"AI",     desc:"Multi-step agent pipelines",    active:false },
 ];
 
+const MOCK_FILES = [
+  { name:"src/App.tsx",                   lang:"tsx", code:`export default function App() {\n  return <div className="app">Hello Lotus</div>;\n}` },
+  { name:"src/components/Home.tsx",       lang:"tsx", code:`export default function Home() {\n  return <main>Home screen</main>;\n}` },
+  { name:"src/components/Dashboard.tsx",  lang:"tsx", code:`export default function Dashboard() {\n  return <section>Dashboard</section>;\n}` },
+  { name:"src/lib/supabase.ts",           lang:"ts",  code:`import { createClient } from "@supabase/supabase-js";\nexport const supabase = createClient(URL, KEY);` },
+  { name:"package.json",                  lang:"json",code:`{\n  "name": "lotus-app",\n  "version": "1.0.0"\n}` },
+  { name:"README.md",                     lang:"md",  code:`# Lotus App\n\nBuilt with Lotus AI builder.` },
+];
+
 const PLUS_ITEMS = [
   { icon:<Upload size={12}/>,   label:"Upload File"         },
   { icon:<ImageIcon size={12}/>,label:"Upload Image"        },
@@ -147,53 +168,33 @@ const INIT_MESSAGES: ChatMessage[] = [
   { id:"3", role:"assistant", content:"Crafting a three-tab layout — Mood, Sleep, Journal — with sage-and-ivory palette. Generating preview…", ts: new Date(Date.now()-60000) },
 ];
 
-const PROJECT_FOLDERS: ProjectFolder[] = [
-  { id:"client", name:"Client Builds", color:"#D4A030" },
-  { id:"experiments", name:"Experiments", color:"#4E8D7C" },
-  { id:"store", name:"Store Ready", color:"#6A5ACD" },
+// ─── Preset types ─────────────────────────────────────────────────────────────
+type PresetId = "wellness"|"shop"|"social"|"finance"|"food"|"fitness"|"music"|"travel"|"realestate";
+
+interface Preset { id: PresetId; label: string; emoji: string; keywords: string[]; accent: string; bg: string; }
+
+const PRESETS: Preset[] = [
+  { id:"wellness",   label:"Wellness",    emoji:"🌿", keywords:["wellness","mood","sleep","journal","meditat","calm","breath","gratitud"],       accent:"#2D4A3E", bg:"#F0F4EE" },
+  { id:"shop",       label:"Shop",        emoji:"🛍️", keywords:["shop","store","buy","product","commerce","cart","fashion","retail","checkout"],  accent:"#1A1A2E", bg:"#F8F8F5" },
+  { id:"social",     label:"Social",      emoji:"📱", keywords:["social","feed","post","instagram","follow","like","story","profile","photo"],    accent:"#5B5BD6", bg:"#F5F4FF" },
+  { id:"finance",    label:"Finance",     emoji:"💹", keywords:["finance","money","bank","invest","crypto","wallet","stock","portfolio","trade"],  accent:"#0A2540", bg:"#F0F4F8" },
+  { id:"food",       label:"Food",        emoji:"🍕", keywords:["food","eat","restaurant","delivery","pizza","burger","meal","order","hungry"],   accent:"#C1440E", bg:"#FFF8F3" },
+  { id:"fitness",    label:"Fitness",     emoji:"🏃", keywords:["fitness","gym","workout","run","exercise","training","steps","calories","sport"],accent:"#1B4332", bg:"#F0FAF4" },
+  { id:"music",      label:"Music",       emoji:"🎵", keywords:["music","song","playlist","album","spotify","artist","beat","listen","audio"],    accent:"#6D28D9", bg:"#0D0D1A" },
+  { id:"travel",     label:"Travel",      emoji:"✈️", keywords:["travel","trip","hotel","flight","vacation","destination","book","tour","explore"],accent:"#164E63", bg:"#F0F9FF" },
+  { id:"realestate", label:"Real Estate", emoji:"🏠", keywords:["house","real estate","property","home","rent","apartment","listing","buy house"],accent:"#78350F", bg:"#FFFBF0" },
 ];
 
-const INIT_PROJECTS: BuilderProject[] = [
-  {
-    id:"proj-wellness",
-    name:"Wellness Tracker",
-    folderId:"client",
-    prompt:DEFAULT_PROMPT,
-    styleSeed:hashText(DEFAULT_PROMPT),
-    updatedAt:new Date(Date.now()-1000*60*3),
-    savedAt:new Date(Date.now()-1000*60*3),
-    pinned:true,
-  },
-  {
-    id:"proj-commerce",
-    name:"Commerce Kit",
-    folderId:"store",
-    prompt:"Build a commerce app with product browsing, cart, checkout, orders, account, and admin inventory screens.",
-    styleSeed:hashText("commerce kit"),
-    updatedAt:new Date(Date.now()-1000*60*48),
-    savedAt:new Date(Date.now()-1000*60*50),
-  },
-  {
-    id:"proj-social",
-    name:"Creator Social",
-    folderId:"experiments",
-    prompt:"Build a creator social app with feed, profile, messaging, notifications, monetization, and moderation tools.",
-    styleSeed:hashText("creator social"),
-    updatedAt:new Date(Date.now()-1000*60*160),
-    savedAt:new Date(Date.now()-1000*60*170),
-  },
-];
+function detectPreset(text: string): PresetId | null {
+  const lower = text.toLowerCase();
+  for (const p of PRESETS) {
+    if (p.keywords.some(k => lower.includes(k))) return p.id;
+  }
+  return null;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(d: Date) { return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }); }
-
-function compactTime(d: Date) {
-  const mins = Math.max(1, Math.round((Date.now() - d.getTime()) / 60000));
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.round(hrs / 24)}d ago`;
-}
 
 function fileIcon(mime: string) {
   if (mime.startsWith("image/")) return <ImageIcon size={10}/>;
@@ -201,91 +202,811 @@ function fileIcon(mime: string) {
   return <FileText size={10}/>;
 }
 
-function downloadBlob(filename: string, blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+// ─── Shared chart data ────────────────────────────────────────────────────────
+const SLEEP_DATA    = [{ day:"Mon",hours:6.5},{ day:"Tue",hours:7.2},{ day:"Wed",hours:8.0},{ day:"Thu",hours:5.8},{ day:"Fri",hours:7.5},{ day:"Sat",hours:8.5},{ day:"Sun",hours:7.1}];
+const MOOD_TREND    = [{ time:"8am",score:3},{ time:"10am",score:4},{ time:"12pm",score:3.5},{ time:"2pm",score:4.2},{ time:"4pm",score:3.8},{ time:"6pm",score:4.5},{ time:"8pm",score:4.8}];
+const FINANCE_DATA  = [{ m:"Jan",v:9800},{ m:"Feb",v:10200},{ m:"Mar",v:9600},{ m:"Apr",v:11400},{ m:"May",v:12800},{ m:"Jun",v:13100},{ m:"Jul",v:14650}];
+const STEPS_DATA    = [{ d:"M",s:7400},{ d:"T",s:9100},{ d:"W",s:6800},{ d:"T",s:11200},{ d:"F",s:8300},{ d:"S",s:12500},{ d:"S",s:5900}];
+const MOODS = [{ emoji:"😔",label:"Low",color:"#94A3B8"},{ emoji:"😐",label:"Okay",color:"#A3B18A"},{ emoji:"🙂",label:"Good",color:"#84C07D"},{ emoji:"😊",label:"Great",color:"#52B788"},{ emoji:"🌟",label:"Bliss",color:"#2D6A4F"}];
+
+// ─── Shared preview shell helper ─────────────────────────────────────────────
+function PreviewShell({ bg, children }: { bg:string; children:React.ReactNode }) {
+  return <div className="w-full h-full flex flex-col overflow-hidden" style={{ background:bg, fontFamily:"Outfit,sans-serif" }}>{children}</div>;
+}
+function Card({ p=14, r=16, children }: { p?:number; r?:number; children:React.ReactNode }) {
+  return <div style={{ background:"#fff", borderRadius:r, padding:p, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>{children}</div>;
+}
+function Label({ children, color="#9EB8AE" }: { children:React.ReactNode; color?:string }) {
+  return <p style={{ fontSize:9, color, fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" as const, marginBottom:8 }}>{children}</p>;
 }
 
-const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k=0; k<8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
+// ─── 1. Wellness ──────────────────────────────────────────────────────────────
+function WellnessPreview({ device }: { device: DeviceMode }) {
+  const [tab, setTab] = useState<"mood"|"sleep"|"journal">("mood");
+  const [selectedMood, setSelectedMood] = useState(3);
+  const gradId = useRef(`mg-${Math.random().toString(36).slice(2, 9)}`).current;
+  const isPhone = device === "phone";
+  const navTabs = [
+    { key:"mood",    label:"Mood",    Icon:Heart   },
+    { key:"sleep",   label:"Sleep",   Icon:Moon    },
+    { key:"journal", label:"Journal", Icon:BookOpen },
+  ] as const;
+  return (
+    <div className="w-full h-full flex flex-col overflow-hidden" style={{ background:"#F7F9F6", fontFamily:"Outfit,sans-serif" }}>
 
-function crc32(data: Uint8Array) {
-  let crc = 0xffffffff;
-  for (const byte of data) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-  return (crc ^ 0xffffffff) >>> 0;
+      {/* ── Status / Header ── */}
+      <div style={{ background:"#fff", borderBottom:"1px solid rgba(0,0,0,0.06)", flexShrink:0 }}>
+        {/* Top row */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:`${isPhone?8:10}px ${isPhone?14:20}px` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <img src={IMG.avatar} alt="Avatar" style={{ width:isPhone?28:34, height:isPhone?28:34, borderRadius:"50%", objectFit:"cover", border:"2px solid #C8E6C9" }}/>
+            <div>
+              <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:500, lineHeight:1.2 }}>Good morning</p>
+              <p style={{ fontSize:isPhone?12:14, fontWeight:600, color:"#1A3C32", lineHeight:1.2 }}>Sophia</p>
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:isPhone?6:10 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:4, padding:"4px 8px", borderRadius:999, background:"rgba(45,74,62,0.08)" }}>
+              <Flame size={isPhone?9:11} color="#E07A5F"/>
+              <span style={{ fontSize:isPhone?9:11, fontWeight:600, color:"#E07A5F" }}>7</span>
+            </div>
+            <div style={{ width:isPhone?24:28, height:isPhone?24:28, borderRadius:"50%", background:"#F0F4EE", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Bell size={isPhone?11:13} color="#6B8C7E"/>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        {!isPhone ? (
+          <div style={{ display:"flex", padding:"0 20px", gap:2 }}>
+            {navTabs.map(({ key, label, Icon }) => (
+              <button key={key} onClick={()=>setTab(key)}
+                style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:"8px 8px 0 0", fontSize:12, fontWeight:500,
+                  background:tab===key?"#F7F9F6":"transparent",
+                  color:tab===key?"#2D4A3E":"#9EB8AE",
+                  borderBottom:tab===key?"2px solid #2D4A3E":"2px solid transparent" }}>
+                <Icon size={12}/>{label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display:"flex", padding:"0 14px 0", gap:4 }}>
+            {navTabs.map(({ key, label, Icon }) => (
+              <button key={key} onClick={()=>setTab(key)}
+                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2, padding:"6px 0",
+                  color:tab===key?"#2D4A3E":"#B0CAC0",
+                  borderBottom:tab===key?"2px solid #2D4A3E":"2px solid transparent",
+                  background:"transparent", fontSize:9, fontWeight:500 }}>
+                <Icon size={11}/>{label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Tab content ── */}
+      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth:"none" }}>
+
+        {/* MOOD TAB */}
+        {tab==="mood" && (
+          <div style={{ padding:isPhone?12:20, display:"flex", flexDirection:"column", gap:isPhone?12:16 }}>
+
+            {/* Hero image card */}
+            <div style={{ position:"relative", borderRadius:isPhone?16:20, overflow:"hidden", height:isPhone?120:160, flexShrink:0 }}>
+              <img src={IMG.meditation} alt="Meditation" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(45,74,62,0.1), rgba(45,74,62,0.55))" }}/>
+              <div style={{ position:"absolute", bottom:0, left:0, padding:isPhone?12:16 }}>
+                <p style={{ fontSize:isPhone?9:10, color:"rgba(255,255,255,0.8)", fontWeight:500, letterSpacing:"0.06em", textTransform:"uppercase" }}>Daily intention</p>
+                <p style={{ fontSize:isPhone?12:15, color:"#fff", fontWeight:600, lineHeight:1.4, maxWidth:200 }}>Find stillness in every breath</p>
+              </div>
+              <div style={{ position:"absolute", top:10, right:10, background:"rgba(255,255,255,0.2)", backdropFilter:"blur(8px)", borderRadius:999, padding:"3px 8px", display:"flex", alignItems:"center", gap:4 }}>
+                <Wind size={isPhone?9:10} color="#fff"/>
+                <span style={{ fontSize:isPhone?9:10, color:"#fff", fontWeight:500 }}>Breathe</span>
+              </div>
+            </div>
+
+            {/* Mood picker */}
+            <div style={{ background:"#fff", borderRadius:isPhone?14:18, padding:isPhone?12:16, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:isPhone?8:12 }}>How are you feeling?</p>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:4 }}>
+                {MOODS.map((m,i)=>(
+                  <button key={i} onClick={()=>setSelectedMood(i)}
+                    style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, padding:`${isPhone?6:8}px 4px`, borderRadius:12,
+                      background:selectedMood===i?m.color+"18":"transparent",
+                      border:selectedMood===i?`1.5px solid ${m.color}40`:"1.5px solid transparent",
+                      transition:"all 0.2s" }}>
+                    <span style={{ fontSize:isPhone?18:22, filter:selectedMood===i?"none":"grayscale(0.5)", opacity:selectedMood===i?1:0.55 }}>{m.emoji}</span>
+                    <span style={{ fontSize:isPhone?8:9, color:selectedMood===i?m.color:"#9EB8AE", fontWeight:600 }}>{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mood trend chart */}
+            <div style={{ background:"#fff", borderRadius:isPhone?14:18, padding:isPhone?12:16, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:isPhone?8:12 }}>
+                <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" }}>Today's trend</p>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                  <TrendingUp size={isPhone?10:12} color="#52B788"/>
+                  <span style={{ fontSize:isPhone?9:11, color:"#52B788", fontWeight:600 }}>+0.8</span>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={isPhone?52:70}>
+                <AreaChart data={MOOD_TREND} margin={{ top:4, right:0, left:-24, bottom:0 }}>
+                  <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#52B788" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#52B788" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="time" tick={{ fontSize:8, fill:"#9EB8AE" }} axisLine={false} tickLine={false}/>
+                  <Tooltip contentStyle={{ fontSize:10, borderRadius:8, border:"none", boxShadow:"0 4px 16px rgba(0,0,0,0.1)", fontFamily:"Outfit,sans-serif" }} itemStyle={{ color:"#2D4A3E" }}/>
+                  <Area type="monotone" dataKey="score" stroke="#52B788" strokeWidth={2} fill={`url(#${gradId})`} dot={false}/>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* SLEEP TAB */}
+        {tab==="sleep" && (
+          <div style={{ padding:isPhone?12:20, display:"flex", flexDirection:"column", gap:isPhone?12:16 }}>
+
+            {/* Night image */}
+            <div style={{ position:"relative", borderRadius:isPhone?16:20, overflow:"hidden", height:isPhone?110:140, flexShrink:0 }}>
+              <img src={IMG.night} alt="Night sky" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(10,20,40,0.2), rgba(10,20,40,0.7))" }}/>
+              <div style={{ position:"absolute", bottom:0, left:0, padding:isPhone?12:16, display:"flex", gap:isPhone?16:24 }}>
+                {[{ label:"Avg", val:"7h 22m" }, { label:"Best", val:"8h 32m" }, { label:"Score", val:"84" }].map(s=>(
+                  <div key={s.label}>
+                    <p style={{ fontSize:isPhone?8:9, color:"rgba(255,255,255,0.6)", fontWeight:500 }}>{s.label}</p>
+                    <p style={{ fontSize:isPhone?13:16, color:"#fff", fontWeight:700 }}>{s.val}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ position:"absolute", top:10, right:10 }}>
+                <Moon size={isPhone?16:20} color="rgba(255,255,255,0.8)"/>
+              </div>
+            </div>
+
+            {/* Sleep bar chart */}
+            <div style={{ background:"#fff", borderRadius:isPhone?14:18, padding:isPhone?12:16, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:isPhone?8:12 }}>Weekly sleep hours</p>
+              <ResponsiveContainer width="100%" height={isPhone?80:110}>
+                <BarChart data={SLEEP_DATA} margin={{ top:4, right:0, left:-28, bottom:0 }} barSize={isPhone?14:20}>
+                  <XAxis dataKey="day" tick={{ fontSize:9, fill:"#9EB8AE" }} axisLine={false} tickLine={false}/>
+                  <YAxis domain={[4,10]} tick={{ fontSize:8, fill:"#9EB8AE" }} axisLine={false} tickLine={false}/>
+                  <Tooltip contentStyle={{ fontSize:10, borderRadius:8, border:"none", boxShadow:"0 4px 16px rgba(0,0,0,0.1)", fontFamily:"Outfit,sans-serif" }} itemStyle={{ color:"#1A3C32" }}/>
+                  <Bar dataKey="hours" radius={[4,4,0,0]}
+                    fill="#2D4A3E"
+                    label={false}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Sleep quality */}
+            <div style={{ background:"#fff", borderRadius:isPhone?14:18, padding:isPhone?12:16, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:isPhone?8:12 }}>Sleep stages — last night</p>
+              {[{ label:"Deep", pct:22, color:"#1A3C32" }, { label:"REM", pct:28, color:"#2D4A3E" }, { label:"Light", pct:38, color:"#52B788" }, { label:"Awake", pct:12, color:"#C8E6C9" }].map(s=>(
+                <div key={s.label} style={{ marginBottom:isPhone?6:8 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                    <span style={{ fontSize:isPhone?9:11, color:"#3D6B5A", fontWeight:500 }}>{s.label}</span>
+                    <span style={{ fontSize:isPhone?9:11, color:"#9EB8AE", fontWeight:500 }}>{s.pct}%</span>
+                  </div>
+                  <div style={{ height:isPhone?5:6, borderRadius:999, background:"#F0F4EE", overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${s.pct}%`, borderRadius:999, background:s.color, transition:"width 0.8s ease" }}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* JOURNAL TAB */}
+        {tab==="journal" && (
+          <div style={{ padding:isPhone?12:20, display:"flex", flexDirection:"column", gap:isPhone?12:16 }}>
+
+            {/* Journal hero */}
+            <div style={{ position:"relative", borderRadius:isPhone?16:20, overflow:"hidden", height:isPhone?120:150, flexShrink:0 }}>
+              <img src={IMG.journal} alt="Journal" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, rgba(255,255,255,0.85), rgba(255,255,255,0.2))" }}/>
+              <div style={{ position:"absolute", top:0, left:0, padding:isPhone?14:20 }}>
+                <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>Today · July 15</p>
+                <p style={{ fontSize:isPhone?14:18, fontFamily:"Fraunces,serif", color:"#1A3C32", fontWeight:500, lineHeight:1.35, maxWidth:180 }}>Grateful for quiet moments</p>
+              </div>
+            </div>
+
+            {/* Entry */}
+            <div style={{ background:"#fff", borderRadius:isPhone?14:18, padding:isPhone?14:18, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:isPhone?8:12 }}>
+                <Star size={isPhone?12:14} color="#D4A030" fill="#D4A030"/>
+                <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.05em", textTransform:"uppercase" }}>Three things I'm grateful for</p>
+              </div>
+              {["The quiet morning light filtering through the window", "A strong cup of coffee and the smell of rain", "My team's support during a challenging sprint"].map((entry,i)=>(
+                <div key={i} style={{ display:"flex", gap:10, marginBottom:isPhone?8:10, alignItems:"flex-start" }}>
+                  <div style={{ width:isPhone?18:20, height:isPhone?18:20, borderRadius:"50%", background:"rgba(200,146,42,0.12)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                    <span style={{ fontSize:isPhone?9:10, color:"#C8922A", fontWeight:700 }}>{i+1}</span>
+                  </div>
+                  <p style={{ fontSize:isPhone?11:12.5, color:"#3D6B5A", lineHeight:1.55 }}>{entry}</p>
+                </div>
+              ))}
+              <div style={{ marginTop:isPhone?10:14, display:"flex", flexWrap:"wrap", gap:6 }}>
+                {["#morning","#grateful","#team","#calm"].map(tag=>(
+                  <span key={tag} style={{ fontSize:isPhone?9:10, background:"#EAF3EE", color:"#52B788", fontWeight:600, padding:"2px 8px", borderRadius:999 }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Past entries preview */}
+            <div style={{ background:"#fff", borderRadius:isPhone?14:18, padding:isPhone?12:16, boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+              <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:isPhone?8:10 }}>Recent entries</p>
+              {[{ date:"Jul 14", preview:"Appreciated the rain and the silence it brought…", mood:"😊" }, { date:"Jul 13", preview:"Proud of shipping the new feature on time…", mood:"🌟" }, { date:"Jul 12", preview:"Finding it hard to focus, but pushed through…", mood:"😐" }].map(e=>(
+                <div key={e.date} style={{ display:"flex", alignItems:"center", gap:10, padding:`${isPhone?7:9}px 0`, borderBottom:"1px solid #F0F4EE" }}>
+                  <span style={{ fontSize:isPhone?14:16 }}>{e.mood}</span>
+                  <div style={{ flex:1, overflow:"hidden" }}>
+                    <p style={{ fontSize:isPhone?9:10, color:"#9EB8AE", fontWeight:500 }}>{e.date}</p>
+                    <p style={{ fontSize:isPhone?10:11, color:"#3D6B5A", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.preview}</p>
+                  </div>
+                  <ChevronDown size={isPhone?10:12} color="#C8E6C9" style={{ transform:"rotate(-90deg)" }}/>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function zipHeader(signature: number, size: number) {
-  const bytes = new Uint8Array(size);
-  const view = new DataView(bytes.buffer);
-  view.setUint32(0, signature, true);
-  return { bytes, view };
+// ─── 2. Shop ─────────────────────────────────────────────────────────────────
+function ShopPreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  const products = [
+    { name:"Linen Blazer", price:"$148", tag:"New", img:IMG.shopHero },
+    { name:"Canvas Tote",  price:"$64",  tag:"",    img:IMG.shopBag  },
+  ];
+  return (
+    <PreviewShell bg="#F8F8F5">
+      <div style={{ background:"#fff", padding:`${ph?10:14}px ${ph?14:20}px`, borderBottom:"1px solid #F0EEE8", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontFamily:"Fraunces,serif", fontSize:ph?16:18, fontWeight:600, color:"#1A1A2E" }}>Maison</span>
+        <div style={{ display:"flex", gap:10 }}>
+          {["Search","Cart"].map(l=><button key={l} style={{ fontSize:ph?9:11, color:"#9998A9", fontWeight:500 }}>{l}</button>)}
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const, padding:ph?12:20 }}>
+        <div style={{ position:"relative", borderRadius:ph?16:20, overflow:"hidden", height:ph?140:190, marginBottom:ph?12:16 }}>
+          <img src={IMG.shopHero} alt="Hero" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right,rgba(26,26,46,0.65),transparent)" }}/>
+          <div style={{ position:"absolute", top:0, left:0, padding:ph?16:24 }}>
+            <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.7)", letterSpacing:"0.1em", textTransform:"uppercase" as const }}>New Season</p>
+            <p style={{ fontSize:ph?18:24, fontFamily:"Fraunces,serif", color:"#fff", fontWeight:500, lineHeight:1.3, marginTop:4 }}>Summer<br/>Essentials</p>
+            <button style={{ marginTop:10, background:"#fff", color:"#1A1A2E", fontSize:ph?9:11, fontWeight:600, padding:`${ph?5:6}px ${ph?12:16}px`, borderRadius:999 }}>Shop Now</button>
+          </div>
+        </div>
+        <p style={{ fontSize:ph?9:10, color:"#9998A9", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" as const, marginBottom:10 }}>Featured</p>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:ph?10:14 }}>
+          {products.map(p=>(
+            <div key={p.name} style={{ borderRadius:ph?12:16, overflow:"hidden", background:"#fff", boxShadow:"0 2px 10px rgba(0,0,0,0.06)" }}>
+              <div style={{ height:ph?100:130, overflow:"hidden", position:"relative" }}>
+                <img src={p.img} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                {p.tag && <span style={{ position:"absolute", top:8, left:8, background:"#1A1A2E", color:"#fff", fontSize:8, fontWeight:700, padding:"2px 7px", borderRadius:999 }}>{p.tag}</span>}
+              </div>
+              <div style={{ padding:ph?8:10 }}>
+                <p style={{ fontSize:ph?10:12, fontWeight:600, color:"#1A1A2E" }}>{p.name}</p>
+                <p style={{ fontSize:ph?9:11, color:"#9998A9", marginTop:2 }}>{p.price}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop:ph?12:16 }}>
+          <p style={{ fontSize:ph?9:10, color:"#9998A9", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" as const, marginBottom:10 }}>Categories</p>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" as const }}>
+            {["Tops","Bottoms","Outerwear","Accessories","Shoes"].map(c=>(
+              <button key={c} style={{ padding:`${ph?4:5}px ${ph?10:14}px`, borderRadius:999, background:"#F0EEE8", color:"#1A1A2E", fontSize:ph?9:11, fontWeight:500 }}>{c}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </PreviewShell>
+  );
 }
 
-function createZipBlob(files: GeneratedCodeFile[]) {
-  const encoder = new TextEncoder();
-  const localParts: Uint8Array[] = [];
-  const centralParts: Uint8Array[] = [];
-  let offset = 0;
+// ─── 3. Social ────────────────────────────────────────────────────────────────
+function SocialPreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  const [liked, setLiked] = useState<Record<number,boolean>>({});
+  const posts = [
+    { user:"@luna.visual",  img:IMG.socialPost1, likes:2847, caption:"Golden hour never gets old ✨", time:"2m" },
+    { user:"@raf.creates",  img:IMG.socialPost2, likes:1203, caption:"New studio setup is 🔥",        time:"18m" },
+    { user:"@mia.wanders",  img:IMG.socialPost3, likes:4510, caption:"Social media in 2025",         time:"1h" },
+  ];
+  return (
+    <PreviewShell bg="#FAFAFA">
+      <div style={{ background:"#fff", padding:`${ph?10:12}px ${ph?14:20}px`, borderBottom:"1px solid #F0F0F0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontFamily:"Fraunces,serif", fontSize:ph?17:20, fontWeight:600, color:"#1A1A1A" }}>Aura</span>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <Bell size={ph?14:16} color="#5B5BD6"/>
+          <div style={{ width:ph?26:30, height:ph?26:30, borderRadius:"50%", overflow:"hidden" }}>
+            <img src={IMG.avatar} alt="me" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          </div>
+        </div>
+      </div>
+      {/* Stories */}
+      <div style={{ background:"#fff", padding:`${ph?10:12}px 0`, borderBottom:"1px solid #F0F0F0", display:"flex", gap:ph?10:14, overflowX:"auto", scrollbarWidth:"none" as const, paddingLeft:ph?14:20, paddingRight:ph?14:20 }}>
+        {[IMG.socialPost1, IMG.socialPost2, IMG.socialPost3, IMG.avatar].map((src,i)=>(
+          <div key={i} style={{ flexShrink:0, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+            <div style={{ width:ph?42:52, height:ph?42:52, borderRadius:"50%", padding:2, background:"linear-gradient(135deg,#5B5BD6,#E07A5F)", flexShrink:0 }}>
+              <div style={{ width:"100%", height:"100%", borderRadius:"50%", overflow:"hidden", border:"2px solid #fff" }}>
+                <img src={src} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              </div>
+            </div>
+            <span style={{ fontSize:8, color:"#888", fontWeight:500 }}>{["Luna","Raf","Mia","You"][i]}</span>
+          </div>
+        ))}
+      </div>
+      {/* Feed */}
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const }}>
+        {posts.map((post,i)=>(
+          <div key={i} style={{ borderBottom:"8px solid #F5F5F5" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, padding:`${ph?8:10}px ${ph?14:20}px` }}>
+              <div style={{ width:ph?28:34, height:ph?28:34, borderRadius:"50%", overflow:"hidden", border:"2px solid #5B5BD6" }}>
+                <img src={Object.values(IMG)[i%4]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              </div>
+              <span style={{ fontSize:ph?11:13, fontWeight:600, color:"#1A1A1A", flex:1 }}>{post.user}</span>
+              <span style={{ fontSize:ph?9:10, color:"#AAA" }}>{post.time}</span>
+            </div>
+            <div style={{ height:ph?220:280, overflow:"hidden" }}>
+              <img src={post.img} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+            </div>
+            <div style={{ padding:`${ph?8:10}px ${ph?14:20}px` }}>
+              <div style={{ display:"flex", gap:16, marginBottom:6 }}>
+                <button onClick={()=>setLiked(l=>({...l,[i]:!l[i]}))} style={{ display:"flex", alignItems:"center", gap:4, background:"none" }}>
+                  <Heart size={ph?14:16} color={liked[i]?"#E07A5F":"#888"} fill={liked[i]?"#E07A5F":"none"}/>
+                  <span style={{ fontSize:ph?11:13, color:"#888", fontWeight:500 }}>{post.likes+(liked[i]?1:0)}</span>
+                </button>
+              </div>
+              <p style={{ fontSize:ph?11:13, color:"#1A1A1A", lineHeight:1.5 }}>{post.caption}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </PreviewShell>
+  );
+}
 
-  for (const file of files) {
-    const name = encoder.encode(file.name);
-    const data = encoder.encode(file.code);
-    const crc = crc32(data);
+// ─── 4. Finance ───────────────────────────────────────────────────────────────
+function FinancePreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  const gid = useRef(`fg-${Math.random().toString(36).slice(2, 9)}`).current;
+  return (
+    <PreviewShell bg="#F0F4F8">
+      <div style={{ background:"linear-gradient(135deg,#0A2540,#1A3A5C)", padding:`${ph?14:20}px ${ph?16:24}px`, flexShrink:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:ph?16:22 }}>
+          <span style={{ fontFamily:"Fraunces,serif", fontSize:ph?16:18, color:"rgba(255,255,255,0.9)", fontWeight:500 }}>Portfolio</span>
+          <div style={{ width:ph?26:30, height:ph?26:30, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.3)" }}>
+            <img src={IMG.avatar} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          </div>
+        </div>
+        <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.06em", textTransform:"uppercase" as const }}>Total balance</p>
+        <p style={{ fontSize:ph?28:36, fontWeight:700, color:"#fff", lineHeight:1.2, margin:"4px 0" }}>$14,650<span style={{ fontSize:ph?14:18, fontWeight:400, opacity:0.7 }}>.28</span></p>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <TrendingUp size={ph?11:13} color="#4ADE80"/>
+          <span style={{ fontSize:ph?10:12, color:"#4ADE80", fontWeight:600 }}>+$1,824 (14.2%) this month</span>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const, padding:ph?12:20, display:"flex", flexDirection:"column", gap:ph?12:16 }}>
+        <Card p={ph?12:16} r={ph?14:18}>
+          <Label>7-month performance</Label>
+          <ResponsiveContainer width="100%" height={ph?80:110}>
+            <AreaChart data={FINANCE_DATA} margin={{ top:4,right:0,left:-28,bottom:0 }}>
+              <defs>
+                <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#0A2540" stopOpacity={0.25}/>
+                  <stop offset="95%" stopColor="#0A2540" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="m" tick={{ fontSize:8, fill:"#9EB8AE" }} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={{ fontSize:10, borderRadius:8, border:"none", boxShadow:"0 4px 16px rgba(0,0,0,0.1)", fontFamily:"Outfit,sans-serif" }}/>
+              <Area type="monotone" dataKey="v" stroke="#0A2540" strokeWidth={2} fill={`url(#${gid})`} dot={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card p={ph?12:16} r={ph?14:18}>
+          <Label>Holdings</Label>
+          {[{ name:"AAPL",  pct:38, gain:"+12.4%", color:"#0A2540" },{ name:"BTC",   pct:25, gain:"+34.1%", color:"#4A90D9" },{ name:"NVDA",  pct:22, gain:"+8.7%",  color:"#52B788" },{ name:"Cash",  pct:15, gain:"",       color:"#C8D8E4" }].map(h=>(
+            <div key={h.name} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:ph?8:10 }}>
+              <div style={{ width:28, height:28, borderRadius:8, background:h.color, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{ fontSize:ph?11:13, fontWeight:600, color:"#0A2540" }}>{h.name}</span>
+                  <span style={{ fontSize:ph?10:12, color:"#52B788", fontWeight:600 }}>{h.gain}</span>
+                </div>
+                <div style={{ height:3, borderRadius:999, background:"#EEF2F6", marginTop:4, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${h.pct}%`, background:h.color, borderRadius:999 }}/>
+                </div>
+              </div>
+              <span style={{ fontSize:ph?10:11, color:"#9EB8AE", fontWeight:500, flexShrink:0 }}>{h.pct}%</span>
+            </div>
+          ))}
+        </Card>
+        <Card p={ph?12:16} r={ph?14:18}>
+          <Label>Recent transactions</Label>
+          {[{ name:"Apple Inc.",icon:"🍎",amt:"-$245.00",sub:"Bought 1.2 AAPL" },{ name:"Dividend",icon:"💰",amt:"+$18.40",sub:"MSFT quarterly" },{ name:"Withdrawal",icon:"🏦",amt:"-$500.00",sub:"To savings" }].map(t=>(
+            <div key={t.name} style={{ display:"flex", alignItems:"center", gap:10, padding:`${ph?6:8}px 0`, borderBottom:"1px solid #F5F7FA" }}>
+              <div style={{ width:ph?28:32, height:ph?28:32, borderRadius:10, background:"#EEF2F6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:ph?14:16 }}>{t.icon}</div>
+              <div style={{ flex:1 }}>
+                <p style={{ fontSize:ph?11:13, fontWeight:500, color:"#0A2540" }}>{t.name}</p>
+                <p style={{ fontSize:ph?9:10, color:"#9EB8AE" }}>{t.sub}</p>
+              </div>
+              <span style={{ fontSize:ph?11:13, fontWeight:600, color:t.amt.startsWith("+")?"#52B788":"#0A2540" }}>{t.amt}</span>
+            </div>
+          ))}
+        </Card>
+      </div>
+    </PreviewShell>
+  );
+}
 
-    const local = zipHeader(0x04034b50, 30 + name.length);
-    local.view.setUint16(4, 20, true);
-    local.view.setUint16(6, 0, true);
-    local.view.setUint16(8, 0, true);
-    local.view.setUint32(14, crc, true);
-    local.view.setUint32(18, data.length, true);
-    local.view.setUint32(22, data.length, true);
-    local.view.setUint16(26, name.length, true);
-    local.bytes.set(name, 30);
-    localParts.push(local.bytes, data);
+// ─── 5. Food Delivery ─────────────────────────────────────────────────────────
+function FoodPreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  return (
+    <PreviewShell bg="#FFF8F3">
+      <div style={{ position:"relative", height:ph?140:180, flexShrink:0 }}>
+        <img src={IMG.foodHero} alt="Food" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom,rgba(193,68,14,0.05),rgba(20,10,0,0.7))" }}/>
+        <div style={{ position:"absolute", bottom:0, left:0, padding:ph?14:20 }}>
+          <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.7)", letterSpacing:"0.08em", textTransform:"uppercase" as const }}>Order in 25 min</p>
+          <p style={{ fontSize:ph?20:26, fontFamily:"Fraunces,serif", color:"#fff", fontWeight:600, lineHeight:1.2 }}>What are you craving?</p>
+        </div>
+        <div style={{ position:"absolute", top:12, right:12, background:"rgba(255,255,255,0.95)", borderRadius:999, padding:`${ph?4:5}px ${ph?10:14}px`, display:"flex", alignItems:"center", gap:5 }}>
+          <Flame size={ph?10:12} color="#C1440E"/>
+          <span style={{ fontSize:ph?10:12, color:"#C1440E", fontWeight:700 }}>🔥 Hot deals</span>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const, padding:ph?12:20, display:"flex", flexDirection:"column", gap:ph?12:16 }}>
+        <div style={{ display:"flex", gap:8, overflowX:"auto", scrollbarWidth:"none" as const }}>
+          {["🍕 Pizza","🍔 Burger","🍜 Noodles","🌮 Tacos","🍣 Sushi"].map(c=>(
+            <button key={c} style={{ flexShrink:0, padding:`${ph?5:6}px ${ph?12:16}px`, borderRadius:999, background:c.startsWith("🍕")?"#C1440E":"#F0E8E0", color:c.startsWith("🍕")?"#fff":"#5A3020", fontSize:ph?10:12, fontWeight:600 }}>{c}</button>
+          ))}
+        </div>
+        {[{ name:"Rocco's Pizzeria", rating:"4.8", time:"22 min", img:IMG.foodHero, tag:"Popular" },{ name:"Street City Bowls", rating:"4.6", time:"35 min", img:IMG.foodCity, tag:"" }].map(r=>(
+          <div key={r.name} style={{ borderRadius:ph?14:18, overflow:"hidden", background:"#fff", boxShadow:"0 2px 12px rgba(0,0,0,0.07)" }}>
+            <div style={{ height:ph?100:130, overflow:"hidden", position:"relative" }}>
+              <img src={r.img} alt={r.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              {r.tag && <span style={{ position:"absolute", top:8, left:8, background:"#C1440E", color:"#fff", fontSize:8, fontWeight:700, padding:"2px 8px", borderRadius:999 }}>{r.tag}</span>}
+            </div>
+            <div style={{ padding:ph?10:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <p style={{ fontSize:ph?12:14, fontWeight:600, color:"#2C1004" }}>{r.name}</p>
+                <p style={{ fontSize:ph?9:11, color:"#C1440E", fontWeight:500, marginTop:2 }}>⏱ {r.time} · ⭐ {r.rating}</p>
+              </div>
+              <button style={{ background:"#C1440E", color:"#fff", border:"none", borderRadius:999, padding:`${ph?5:6}px ${ph?12:14}px`, fontSize:ph?10:12, fontWeight:600 }}>Order</button>
+            </div>
+          </div>
+        ))}
+        <Card p={ph?12:14} r={ph?12:16}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:ph?8:10 }}>
+            <Label>Your order</Label>
+            <span style={{ fontSize:ph?9:10, color:"#C1440E", fontWeight:600 }}>Tracking…</span>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {["Order placed","Preparing","On the way","Delivered"].map((step,i)=>(
+              <div key={step} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                <div style={{ width:ph?18:22, height:ph?18:22, borderRadius:"50%", background:i<=2?"#C1440E":"#F0E8E0", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {i<=2 && <Check size={ph?8:10} color="#fff"/>}
+                </div>
+                {i<3 && <div style={{ position:"absolute" }}/>}
+                <span style={{ fontSize:7, color:i<=2?"#C1440E":"#C0A898", fontWeight:500, textAlign:"center" as const }}>{step}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </PreviewShell>
+  );
+}
 
-    const central = zipHeader(0x02014b50, 46 + name.length);
-    central.view.setUint16(4, 20, true);
-    central.view.setUint16(6, 20, true);
-    central.view.setUint16(8, 0, true);
-    central.view.setUint16(10, 0, true);
-    central.view.setUint32(16, crc, true);
-    central.view.setUint32(20, data.length, true);
-    central.view.setUint32(24, data.length, true);
-    central.view.setUint16(28, name.length, true);
-    central.view.setUint32(42, offset, true);
-    central.bytes.set(name, 46);
-    centralParts.push(central.bytes);
+// ─── 6. Fitness ───────────────────────────────────────────────────────────────
+function FitnessPreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  return (
+    <PreviewShell bg="#F0FAF4">
+      <div style={{ background:"#1B4332", padding:`${ph?12:16}px ${ph?16:22}px`, flexShrink:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:ph?12:18 }}>
+          <div>
+            <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.5)", textTransform:"uppercase" as const, letterSpacing:"0.06em" }}>Today</p>
+            <p style={{ fontSize:ph?16:20, fontFamily:"Fraunces,serif", color:"#fff", fontWeight:500 }}>Active Day</p>
+          </div>
+          <div style={{ width:ph?26:30, height:ph?26:30, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.3)" }}>
+            <img src={IMG.avatar} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          {[{ icon:"🏃", label:"Steps", val:"9,241", goal:"10k" },{ icon:"🔥", label:"Calories", val:"487", goal:"600" },{ icon:"⏱", label:"Active", val:"54m", goal:"60m" }].map(s=>(
+            <div key={s.label} style={{ background:"rgba(255,255,255,0.1)", borderRadius:ph?10:14, padding:ph?8:10, textAlign:"center" as const }}>
+              <span style={{ fontSize:ph?14:18 }}>{s.icon}</span>
+              <p style={{ fontSize:ph?14:18, color:"#fff", fontWeight:700, lineHeight:1.2, marginTop:2 }}>{s.val}</p>
+              <p style={{ fontSize:ph?8:9, color:"rgba(255,255,255,0.5)" }}>{s.label} / {s.goal}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const, padding:ph?12:20, display:"flex", flexDirection:"column", gap:ph?12:16 }}>
+        <div style={{ position:"relative", borderRadius:ph?14:18, overflow:"hidden", height:ph?100:130 }}>
+          <img src={IMG.fitRun} alt="Run" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          <div style={{ position:"absolute", inset:0, background:"rgba(27,67,50,0.5)" }}/>
+          <div style={{ position:"absolute", bottom:0, left:0, padding:ph?10:14, display:"flex", gap:ph?16:24 }}>
+            {[{ l:"Distance",v:"5.2 km"},{ l:"Pace",v:"5:48/km"},{ l:"HR",v:"142 bpm"}].map(s=>(
+              <div key={s.l}>
+                <p style={{ fontSize:ph?8:9, color:"rgba(255,255,255,0.6)" }}>{s.l}</p>
+                <p style={{ fontSize:ph?12:14, color:"#fff", fontWeight:700 }}>{s.v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <Card p={ph?12:16} r={ph?14:18}>
+          <Label>Weekly steps</Label>
+          <ResponsiveContainer width="100%" height={ph?70:95}>
+            <BarChart data={STEPS_DATA} margin={{ top:2,right:0,left:-28,bottom:0 }} barSize={ph?14:20}>
+              <XAxis dataKey="d" tick={{ fontSize:9, fill:"#9EB8AE" }} axisLine={false} tickLine={false}/>
+              <Tooltip contentStyle={{ fontSize:10, borderRadius:8, border:"none", boxShadow:"0 4px 16px rgba(0,0,0,0.1)", fontFamily:"Outfit,sans-serif" }}/>
+              <Bar dataKey="s" radius={[4,4,0,0]} fill="#1B4332"/>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card p={ph?12:16} r={ph?14:18}>
+          <Label>Today's workouts</Label>
+          {[{ name:"Morning Run",dur:"32 min",cal:"287 kcal",icon:"🏃"},{ name:"Yoga Flow",dur:"22 min",cal:"145 kcal",icon:"🧘"},{ name:"Core Strength",dur:"18 min",cal:"120 kcal",icon:"💪"}].map(w=>(
+            <div key={w.name} style={{ display:"flex", alignItems:"center", gap:10, padding:`${ph?6:8}px 0`, borderBottom:"1px solid #EBF5EF" }}>
+              <div style={{ width:ph?30:36, height:ph?30:36, borderRadius:10, background:"#EBF5EF", display:"flex", alignItems:"center", justifyContent:"center", fontSize:ph?14:16 }}>{w.icon}</div>
+              <div style={{ flex:1 }}>
+                <p style={{ fontSize:ph?11:13, fontWeight:600, color:"#1B4332" }}>{w.name}</p>
+                <p style={{ fontSize:ph?9:10, color:"#6B8C7E" }}>{w.dur} · {w.cal}</p>
+              </div>
+              <Check size={ph?12:14} color="#52B788"/>
+            </div>
+          ))}
+        </Card>
+      </div>
+    </PreviewShell>
+  );
+}
 
-    offset += local.bytes.length + data.length;
+// ─── 7. Music ─────────────────────────────────────────────────────────────────
+function MusicPreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  const [playing, setPlaying] = useState(true);
+  const [progress, setProgress] = useState(42);
+  return (
+    <PreviewShell bg="#0D0D1A">
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const }}>
+        {/* Now playing hero */}
+        <div style={{ position:"relative", height:ph?260:320 }}>
+          <img src={IMG.musicDark} alt="Album art" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom,rgba(13,13,26,0.3),rgba(13,13,26,0.95))" }}/>
+          <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:ph?20:28 }}>
+            <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.1em", textTransform:"uppercase" as const }}>Now Playing</p>
+            <p style={{ fontSize:ph?20:26, fontFamily:"Fraunces,serif", color:"#fff", fontWeight:500, lineHeight:1.2, marginTop:4 }}>Neon Gravity</p>
+            <p style={{ fontSize:ph?11:13, color:"rgba(255,255,255,0.55)", marginTop:2 }}>Erwi · Synthwave Dreams</p>
+          </div>
+          <div style={{ position:"absolute", top:14, right:14 }}>
+            <Heart size={ph?18:22} color="rgba(255,255,255,0.5)" fill="rgba(255,255,255,0.5)"/>
+          </div>
+        </div>
+        <div style={{ padding:ph?16:24, display:"flex", flexDirection:"column", gap:ph?16:20 }}>
+          {/* Progress */}
+          <div>
+            <div style={{ height:3, borderRadius:999, background:"rgba(255,255,255,0.1)", overflow:"hidden", cursor:"pointer" }} onClick={e=>{ const r=e.currentTarget.getBoundingClientRect(); setProgress(Math.round(((e.clientX-r.left)/r.width)*100)); }}>
+              <div style={{ height:"100%", width:`${progress}%`, background:"linear-gradient(90deg,#6D28D9,#A78BFA)", borderRadius:999, transition:"width 0.1s" }}/>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
+              <span style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.4)" }}>1:54</span>
+              <span style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.4)" }}>4:32</span>
+            </div>
+          </div>
+          {/* Controls */}
+          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:ph?24:32 }}>
+            {[{ label:"⏮", size:ph?20:24 },{ label:playing?"⏸":"▶", size:ph?36:44, accent:true },{ label:"⏭", size:ph?20:24 }].map(c=>(
+              <button key={c.label} onClick={()=>c.label===playing?"⏸":"▶"?setPlaying(p=>!p):null}
+                style={{ fontSize:c.size, lineHeight:1, background:c.accent?"linear-gradient(135deg,#6D28D9,#A78BFA)":undefined, width:c.accent?ph?52:62:undefined, height:c.accent?ph?52:62:undefined, borderRadius:c.accent?"50%":undefined, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+          {/* Playlist */}
+          <div>
+            <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.4)", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase" as const, marginBottom:ph?10:14 }}>Up next</p>
+            {[{ title:"Pulse Signal",artist:"Erwi",dur:"3:47",img:IMG.musicNeon },{ title:"Midnight Drive",artist:"Synthwave Dreams",dur:"5:12",img:IMG.musicDark },{ title:"Crystal Void",artist:"Neon Collective",dur:"4:08",img:IMG.musicNeon }].map((t,i)=>(
+              <div key={t.title} style={{ display:"flex", alignItems:"center", gap:10, padding:`${ph?8:10}px 0`, borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ width:ph?36:42, height:ph?36:42, borderRadius:8, overflow:"hidden", flexShrink:0 }}>
+                  <img src={t.img} alt={t.title} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <p style={{ fontSize:ph?11:13, fontWeight:500, color:i===0?"#A78BFA":"rgba(255,255,255,0.8)" }}>{t.title}</p>
+                  <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.4)" }}>{t.artist}</p>
+                </div>
+                <span style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.3)" }}>{t.dur}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </PreviewShell>
+  );
+}
+
+// ─── 8. Travel ────────────────────────────────────────────────────────────────
+function TravelPreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  return (
+    <PreviewShell bg="#F0F9FF">
+      <div style={{ position:"relative", height:ph?170:210, flexShrink:0 }}>
+        <img src={IMG.travelMtn} alt="Mountain" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom,rgba(22,78,99,0.15),rgba(22,78,99,0.75))" }}/>
+        <div style={{ position:"absolute", bottom:0, left:0, padding:ph?14:20 }}>
+          <p style={{ fontSize:ph?9:10, color:"rgba(255,255,255,0.7)", textTransform:"uppercase" as const, letterSpacing:"0.08em" }}>Featured destination</p>
+          <p style={{ fontSize:ph?20:26, fontFamily:"Fraunces,serif", color:"#fff", fontWeight:600, lineHeight:1.25, marginTop:2 }}>Swiss Alps,<br/>Switzerland</p>
+          <div style={{ display:"flex", gap:12, marginTop:8 }}>
+            {[{ l:"Flights from",v:"$620"},{ l:"Best time",v:"Jun–Sep"}].map(s=>(
+              <div key={s.l} style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(8px)", borderRadius:8, padding:`${ph?4:5}px ${ph?8:10}px` }}>
+                <p style={{ fontSize:ph?8:9, color:"rgba(255,255,255,0.7)" }}>{s.l}</p>
+                <p style={{ fontSize:ph?11:13, color:"#fff", fontWeight:700 }}>{s.v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const, padding:ph?12:20, display:"flex", flexDirection:"column", gap:ph?12:16 }}>
+        <div style={{ display:"flex", gap:8 }}>
+          {["Flights","Hotels","Tours","Car hire"].map((c,i)=>(
+            <button key={c} style={{ flexShrink:0, padding:`${ph?5:6}px ${ph?10:14}px`, borderRadius:999, background:i===0?"#164E63":"#E0F2FE", color:i===0?"#fff":"#164E63", fontSize:ph?10:12, fontWeight:600 }}>{c}</button>
+          ))}
+        </div>
+        <Card p={ph?12:16} r={ph?14:18}>
+          <Label>Your itinerary · 5 nights</Label>
+          {[{ day:"Day 1", plan:"Arrive Zurich · Hotel check-in · Old Town walk",icon:"✈️" },{ day:"Day 2", plan:"Jungfraujoch cable car · Snow hike",icon:"🏔" },{ day:"Day 3", plan:"Grindelwald village · Paragliding",icon:"🪂" },{ day:"Day 4", plan:"Lucerne day trip · Chapel Bridge",icon:"🌉" },{ day:"Day 5", plan:"Depart · Souvenir shopping",icon:"🛍️" }].map(d=>(
+            <div key={d.day} style={{ display:"flex", gap:10, padding:`${ph?7:9}px 0`, borderBottom:"1px solid #E0F2FE" }}>
+              <span style={{ fontSize:ph?14:16, flexShrink:0 }}>{d.icon}</span>
+              <div>
+                <p style={{ fontSize:ph?9:10, color:"#164E63", fontWeight:700 }}>{d.day}</p>
+                <p style={{ fontSize:ph?10:12, color:"#4E8BA0", lineHeight:1.4 }}>{d.plan}</p>
+              </div>
+            </div>
+          ))}
+        </Card>
+        <div style={{ borderRadius:ph?14:18, overflow:"hidden", height:ph?120:150 }}>
+          <img src={IMG.travelBall} alt="Balloon" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+        </div>
+      </div>
+    </PreviewShell>
+  );
+}
+
+// ─── 9. Real Estate ───────────────────────────────────────────────────────────
+function RealEstatePreview({ device }: { device: DeviceMode }) {
+  const ph = device==="phone";
+  return (
+    <PreviewShell bg="#FFFBF0">
+      <div style={{ background:"#fff", padding:`${ph?10:14}px ${ph?14:20}px`, borderBottom:"1px solid #F5EFE0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontFamily:"Fraunces,serif", fontSize:ph?16:20, fontWeight:600, color:"#78350F" }}>Hearth</span>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <Bell size={ph?14:16} color="#78350F"/>
+          <div style={{ width:ph?26:30, height:ph?26:30, borderRadius:"50%", overflow:"hidden" }}>
+            <img src={IMG.avatar} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+          </div>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" as const, padding:ph?12:20, display:"flex", flexDirection:"column", gap:ph?12:16 }}>
+        <div style={{ background:"#F5EFE0", borderRadius:ph?12:16, padding:ph?10:14, display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:ph?14:16 }}>🔍</span>
+          <span style={{ fontSize:ph?11:13, color:"#B8935A" }}>Search London, Paris, NYC…</span>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          {["Buy","Rent","New builds"].map((f,i)=>(
+            <button key={f} style={{ padding:`${ph?4:5}px ${ph?10:14}px`, borderRadius:999, background:i===0?"#78350F":"#F5EFE0", color:i===0?"#fff":"#78350F", fontSize:ph?10:12, fontWeight:600 }}>{f}</button>
+          ))}
+        </div>
+        {[{ name:"Garden Terrace, Notting Hill", price:"£1,850,000", beds:4, baths:3, img:IMG.homeRoom, tag:"New" },{ name:"White Sofa Apartment, Chelsea", price:"£980,000", beds:2, baths:2, img:IMG.homeSofa, tag:"" }].map(l=>(
+          <div key={l.name} style={{ borderRadius:ph?14:18, overflow:"hidden", background:"#fff", boxShadow:"0 2px 12px rgba(0,0,0,0.07)" }}>
+            <div style={{ height:ph?120:160, overflow:"hidden", position:"relative" }}>
+              <img src={l.img} alt={l.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              {l.tag && <span style={{ position:"absolute", top:8, left:8, background:"#78350F", color:"#fff", fontSize:8, fontWeight:700, padding:"2px 8px", borderRadius:999 }}>{l.tag}</span>}
+              <button style={{ position:"absolute", top:8, right:8, background:"rgba(255,255,255,0.9)", border:"none", borderRadius:"50%", width:ph?24:28, height:ph?24:28, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <Heart size={ph?10:12} color="#78350F"/>
+              </button>
+            </div>
+            <div style={{ padding:ph?10:14 }}>
+              <p style={{ fontSize:ph?12:14, fontWeight:700, color:"#78350F" }}>{l.price}</p>
+              <p style={{ fontSize:ph?10:12, color:"#7C5A3A", marginTop:2, lineHeight:1.35 }}>{l.name}</p>
+              <div style={{ display:"flex", gap:12, marginTop:6 }}>
+                {[{ icon:"🛏", v:`${l.beds} bed`},{ icon:"🚿", v:`${l.baths} bath`}].map(f=>(
+                  <span key={f.icon} style={{ fontSize:ph?9:11, color:"#B8935A" }}>{f.icon} {f.v}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </PreviewShell>
+  );
+}
+
+// ─── Preview dispatcher ───────────────────────────────────────────────────────
+function MockPreview({ device, preset }: { device: DeviceMode; preset: PresetId }) {
+  switch (preset) {
+    case "shop":       return <ShopPreview device={device}/>;
+    case "social":     return <SocialPreview device={device}/>;
+    case "finance":    return <FinancePreview device={device}/>;
+    case "food":       return <FoodPreview device={device}/>;
+    case "fitness":    return <FitnessPreview device={device}/>;
+    case "music":      return <MusicPreview device={device}/>;
+    case "travel":     return <TravelPreview device={device}/>;
+    case "realestate": return <RealEstatePreview device={device}/>;
+    default:           return <WellnessPreview device={device}/>;
   }
+}
 
-  const centralOffset = offset;
-  const centralSize = centralParts.reduce((sum, part)=>sum+part.length, 0);
-  const end = zipHeader(0x06054b50, 22);
-  end.view.setUint16(8, files.length, true);
-  end.view.setUint16(10, files.length, true);
-  end.view.setUint32(12, centralSize, true);
-  end.view.setUint32(16, centralOffset, true);
+// ─── Device frames ────────────────────────────────────────────────────────────
+function PhoneFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ position:"relative", width:234, height:480, flexShrink:0 }}>
+      <div style={{ position:"absolute", inset:0, borderRadius:"2.6rem", background:"linear-gradient(160deg,#282828 0%,#0E0E0E 60%,#1A1A1A 100%)", boxShadow:"0 0 0 1px rgba(255,255,255,0.06),0 0 0 2px rgba(0,0,0,0.95),0 32px 80px rgba(0,0,0,0.6)" }}/>
+      <div style={{ position:"absolute", inset:0, borderRadius:"2.6rem", background:"linear-gradient(135deg,rgba(255,255,255,0.07) 0%,transparent 45%,rgba(255,255,255,0.02) 100%)", pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", inset:6, borderRadius:"2.2rem", overflow:"hidden", background:"#050505" }}>
+        <div style={{ position:"absolute", top:9, left:"50%", transform:"translateX(-50%)", width:84, height:24, borderRadius:12, background:"#000", zIndex:10 }}/>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px 4px", background:"#F0F4EE" }}>
+          <span style={{ fontSize:9, fontWeight:700, color:"#2D4A3E" }}>9:41</span>
+          <div style={{ width:10 }}/>
+          <div style={{ width:12, height:7, borderRadius:2, background:"#2D4A3E", opacity:0.7 }}/>
+        </div>
+        <div style={{ height:"calc(100% - 33px)" }}>{children}</div>
+      </div>
+      {/* Buttons */}
+      <div style={{ position:"absolute", right:-1.5, top:"30%", width:3, height:48, borderRadius:"0 2px 2px 0", background:"linear-gradient(180deg,#383838,#1E1E1E)" }}/>
+      <div style={{ position:"absolute", left:-1.5, top:"26%", width:3, height:26, borderRadius:"2px 0 0 2px", background:"linear-gradient(180deg,#383838,#1E1E1E)" }}/>
+      <div style={{ position:"absolute", left:-1.5, top:"36%", width:3, height:26, borderRadius:"2px 0 0 2px", background:"linear-gradient(180deg,#383838,#1E1E1E)" }}/>
+    </div>
+  );
+}
 
-  return new Blob([...localParts, ...centralParts, end.bytes], { type:"application/zip" });
+function TabletFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ position:"relative", width:500, height:360, flexShrink:0 }}>
+      <div style={{ position:"absolute", inset:0, borderRadius:"1.75rem", background:"linear-gradient(145deg,#F0E8D0,#D4C49A)", boxShadow:"0 0 0 1.5px rgba(180,140,60,0.22),0 24px 56px rgba(0,0,0,0.16),inset 0 1px 0 rgba(255,255,255,0.5)" }}/>
+      <div style={{ position:"absolute", inset:8, borderRadius:"1.4rem", overflow:"hidden", background:"#0A0A0A" }}>{children}</div>
+      <div style={{ position:"absolute", bottom:8, left:"50%", transform:"translateX(-50%)", width:16, height:16, borderRadius:"50%", background:"linear-gradient(145deg,#D4C49A,#B8A070)" }}/>
+    </div>
+  );
+}
+
+function DesktopFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ flexShrink:0, display:"flex", flexDirection:"column", alignItems:"center", width:580 }}>
+      <div style={{ position:"relative", width:"100%", borderRadius:"0.75rem 0.75rem 0 0", background:"linear-gradient(145deg,#EEE4C8,#D0BA8A)", padding:"8px 8px 0", boxShadow:"0 0 0 1.5px rgba(180,140,60,0.2),0 24px 64px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.5)" }}>
+        <div style={{ display:"flex", justifyContent:"center", paddingBottom:6 }}>
+          <div style={{ width:8, height:8, borderRadius:"50%", background:"#1A1208" }}/>
+        </div>
+        <div style={{ borderRadius:"0.375rem 0.375rem 0 0", overflow:"hidden", aspectRatio:"16/9" }}>{children}</div>
+      </div>
+      <div style={{ width:"56%", height:10, background:"linear-gradient(180deg,#C4B07A,#A89060)" }}/>
+      <div style={{ width:"70%", height:6, borderRadius:"0 0 0.5rem 0.5rem", background:"linear-gradient(180deg,#B8A070,#9A8055)", boxShadow:"0 2px 10px rgba(0,0,0,0.15)" }}/>
+    </div>
+  );
+}
+
+function DeviceFrame({ device, children }: { device:DeviceMode; children:React.ReactNode }) {
+  if (device==="phone")  return <PhoneFrame>{children}</PhoneFrame>;
+  if (device==="tablet") return <TabletFrame>{children}</TabletFrame>;
+  return <DesktopFrame>{children}</DesktopFrame>;
 }
 
 // ─── Code panel ───────────────────────────────────────────────────────────────
-function CodePanel({ files, appTitle }: { files: GeneratedCodeFile[]; appTitle: string }) {
+function CodePanel() {
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
-  const file = files[Math.min(activeFile, files.length-1)];
-  const downloadName = `${appTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "lotus-app"}.zip`;
+  const file = MOCK_FILES[activeFile];
 
   function handleCopy() {
     navigator.clipboard.writeText(file.code).catch(()=>{});
@@ -293,20 +1014,12 @@ function CodePanel({ files, appTitle }: { files: GeneratedCodeFile[]; appTitle: 
     setTimeout(()=>setCopied(false), 1800);
   }
 
-  function handleDownloadFile() {
-    downloadBlob(file.name.split("/").pop() || "generated-code.txt", new Blob([file.code], { type:"text/plain;charset=utf-8" }));
-  }
-
-  function handleExportZip() {
-    downloadBlob(downloadName, createZipBlob(files));
-  }
-
   return (
     <div className="flex flex-1 overflow-hidden min-h-0">
       {/* File tree */}
       <div className="flex-shrink-0 flex flex-col overflow-y-auto" style={{ width:188, borderRight:"1px solid var(--border)", background:"var(--card)" }}>
         <div className="px-3 py-2.5 text-xs font-semibold" style={{ color:"var(--muted-foreground)", letterSpacing:"0.06em", borderBottom:"1px solid var(--border)" }}>FILES</div>
-        {files.map((f,i)=>(
+        {MOCK_FILES.map((f,i)=>(
           <button key={i} onClick={()=>setActiveFile(i)}
             className="flex items-center gap-2 px-3 py-2 text-left transition-colors"
             style={{ background:i===activeFile?"var(--muted)":"transparent", color:i===activeFile?"var(--foreground)":"var(--muted-foreground)", fontSize:11, fontFamily:"DM Mono,monospace", borderLeft: i===activeFile?"2px solid var(--accent)":"2px solid transparent" }}>
@@ -322,9 +1035,9 @@ function CodePanel({ files, appTitle }: { files: GeneratedCodeFile[]; appTitle: 
           <span style={{ fontSize:11, fontFamily:"DM Mono,monospace", color:"var(--muted-foreground)" }}>{file.name}</span>
           <div className="flex gap-1">
             {[
-              { icon:copied?<Check size={11}/>:<Copy size={11}/>, label:copied?"Copied":"Copy Code", fn:handleCopy },
-              { icon:<Download size={11}/>,  label:"Download Code", fn:handleDownloadFile },
-              { icon:<Archive size={11}/>,   label:"Export ZIP", fn:handleExportZip },
+              { icon:copied?<Check size={11}/>:<Copy size={11}/>, label:copied?"Copied":"Copy", fn:handleCopy },
+              { icon:<Download size={11}/>,  label:"Download", fn:()=>{} },
+              { icon:<Archive size={11}/>,   label:"Export ZIP", fn:()=>{} },
             ].map(a=>(
               <button key={a.label} onClick={a.fn}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-80"
@@ -346,7 +1059,7 @@ function CodePanel({ files, appTitle }: { files: GeneratedCodeFile[]; appTitle: 
 }
 
 // ─── Deployed panel ───────────────────────────────────────────────────────────
-function DeployedPanel({ onViewApp, onCode }: { onViewApp:()=>void; onCode:()=>void }) {
+function DeployedPanel() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background:"rgba(200,146,42,0.12)", border:"1px solid rgba(200,146,42,0.2)" }}>
@@ -357,12 +1070,10 @@ function DeployedPanel({ onViewApp, onCode }: { onViewApp:()=>void; onCode:()=>v
         <p style={{ fontSize:12, color:"var(--muted-foreground)", maxWidth:280, lineHeight:1.6 }}>Your app will be live at a custom subdomain. Connect a domain or deploy to a store.</p>
       </div>
       <div className="flex gap-2 mt-2">
-        <button onClick={onViewApp} className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-          style={{ background:"var(--primary)", color:"var(--primary-foreground)" }}>Web App</button>
-        <button onClick={onViewApp} className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-          style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>Store Settings</button>
-        <button onClick={onCode} className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-          style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>Export Build</button>
+        {["Web App","App Store","Play Store"].map(d=>(
+          <button key={d} className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
+            style={{ background:"var(--primary)", color:"var(--primary-foreground)" }}>{d}</button>
+        ))}
       </div>
     </div>
   );
@@ -385,141 +1096,6 @@ function Modal({ title, onClose, children }: { title:string; onClose:()=>void; c
         <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth:"none" }}>{children}</div>
       </motion.div>
     </motion.div>
-  );
-}
-
-// ─── Projects panel ──────────────────────────────────────────────────────────
-function ProjectsPanel({
-  projects,
-  folders,
-  activeProjectId,
-  onOpen,
-  onNew,
-  onDuplicate,
-  onDelete,
-  onRename,
-  onMove,
-  onSave,
-  onClose,
-}:{
-  projects:BuilderProject[];
-  folders:ProjectFolder[];
-  activeProjectId:string;
-  onOpen:(id:string)=>void;
-  onNew:()=>void;
-  onDuplicate:(id:string)=>void;
-  onDelete:(id:string)=>void;
-  onRename:(id:string, name:string)=>void;
-  onMove:(id:string, folderId:string)=>void;
-  onSave:()=>void;
-  onClose:()=>void;
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draftName, setDraftName] = useState("");
-  const activeProject = projects.find(p=>p.id===activeProjectId);
-  const sortedProjects = [...projects].sort((a,b)=>b.updatedAt.getTime()-a.updatedAt.getTime());
-
-  function beginRename(project: BuilderProject) {
-    setEditingId(project.id);
-    setDraftName(project.name);
-  }
-
-  function commitRename(projectId: string) {
-    const name = draftName.trim();
-    if (name) onRename(projectId, name);
-    setEditingId(null);
-    setDraftName("");
-  }
-
-  return (
-    <Modal title="Projects" onClose={onClose}>
-      <div className="p-4 flex flex-col gap-4">
-        <div className="grid grid-cols-3 gap-2">
-          {folders.map(folder=> {
-            const count = projects.filter(p=>p.folderId===folder.id).length;
-            return (
-              <button key={folder.id} onClick={()=>activeProject && onMove(activeProject.id, folder.id)}
-                className="text-left rounded-xl p-3 transition-all hover:opacity-80"
-                style={{ background:"var(--background)", border:`1px solid ${activeProject?.folderId===folder.id ? folder.color : "var(--border)"}` }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background:folder.color }}/>
-                  <FolderOpen size={12} style={{ color:"var(--muted-foreground)" }}/>
-                </div>
-                <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)" }}>{folder.name}</p>
-                <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2 }}>{count} project{count===1?"":"s"}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button onClick={onNew} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-            style={{ background:"var(--primary)", color:"var(--primary-foreground)" }}>
-            <Plus size={12}/> New Project
-          </button>
-          <button onClick={onSave} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-            style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
-            <Save size={12}/> Save Current
-          </button>
-        </div>
-
-        <div>
-          <p style={{ fontSize:10, fontWeight:700, letterSpacing:"0.06em", color:"var(--muted-foreground)", textTransform:"uppercase", marginBottom:8 }}>Recent Projects</p>
-          <div className="flex flex-col gap-2">
-            {sortedProjects.map(project=>{
-              const folder = folders.find(f=>f.id===project.folderId) || folders[0];
-              const active = project.id===activeProjectId;
-              return (
-                <div key={project.id} className="rounded-xl p-3" style={{ background:active?"rgba(200,146,42,0.10)":"var(--background)", border:`1px solid ${active?"rgba(200,146,42,0.35)":"var(--border)"}` }}>
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:"var(--card)", border:"1px solid var(--border)" }}>
-                      <FolderOpen size={14} style={{ color:folder.color }}/>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {editingId===project.id ? (
-                        <div className="flex gap-2">
-                          <input value={draftName} onChange={e=>setDraftName(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter") commitRename(project.id); }}
-                            autoFocus
-                            className="flex-1 rounded-lg px-2 py-1.5 outline-none text-xs"
-                            style={{ background:"var(--card)", color:"var(--foreground)", border:"1px solid var(--border)", fontFamily:"Outfit,sans-serif" }}/>
-                          <button onClick={()=>commitRename(project.id)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold" style={{ background:"var(--accent)", color:"var(--accent-foreground)" }}>Save</button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <p className="truncate" style={{ fontSize:13, fontWeight:700, color:"var(--foreground)" }}>{project.name}</p>
-                          {project.pinned && <span style={{ fontSize:9, color:"var(--accent)", fontWeight:700 }}>PINNED</span>}
-                        </div>
-                      )}
-                      <p className="truncate" style={{ fontSize:10.5, color:"var(--muted-foreground)", marginTop:3 }}>{project.prompt}</p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span style={{ fontSize:9, color:folder.color, fontWeight:700 }}>{folder.name}</span>
-                        <span style={{ fontSize:9, color:"var(--muted-foreground)" }}>Updated {compactTime(project.updatedAt)}</span>
-                        <span style={{ fontSize:9, color:"var(--muted-foreground)" }}>Saved {compactTime(project.savedAt)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button onClick={()=>onOpen(project.id)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
-                        style={{ background:active?"var(--accent)":"var(--muted)", color:active?"var(--accent-foreground)":"var(--muted-foreground)" }}>
-                        {active?"Open":"Open"}
-                      </button>
-                      <button onClick={()=>beginRename(project)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:opacity-80" style={{ background:"var(--muted)", color:"var(--muted-foreground)" }} aria-label={`Rename ${project.name}`}>
-                        <Pencil size={11}/>
-                      </button>
-                      <button onClick={()=>onDuplicate(project.id)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:opacity-80" style={{ background:"var(--muted)", color:"var(--muted-foreground)" }} aria-label={`Duplicate ${project.name}`}>
-                        <Copy size={11}/>
-                      </button>
-                      <button onClick={()=>onDelete(project.id)} disabled={projects.length===1} className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:opacity-80" style={{ background:"var(--muted)", color:"var(--muted-foreground)", opacity:projects.length===1?0.35:1 }} aria-label={`Delete ${project.name}`}>
-                        <Trash2 size={11}/>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </Modal>
   );
 }
 
@@ -645,9 +1221,8 @@ function FunctionsPanel({ caps, onToggle, onClose }:{ caps:Capability[]; onToggl
 }
 
 // ─── View App modal ───────────────────────────────────────────────────────────
-function ViewAppMenu({ appUrl, onClose }:{ appUrl:string; onClose:()=>void }) {
+function ViewAppMenu({ onClose }:{ onClose:()=>void }) {
   const [tab, setTab] = useState<"web"|"apple"|"google">("web");
-  const [copied, setCopied] = useState(false);
   const tabs:[typeof tab, React.ReactNode, string][] = [
     ["web",    <Globe size={12}/>,    "Web App"],
     ["apple",  <Play size={12}/>,     "App Store"],
@@ -660,12 +1235,6 @@ function ViewAppMenu({ appUrl, onClose }:{ appUrl:string; onClose:()=>void }) {
       <input placeholder={placeholder} className="w-full rounded-lg px-3 py-2 outline-none text-xs" style={{ background:"var(--background)", border:"1px solid var(--border)", color:"var(--foreground)", fontFamily:"Outfit,sans-serif" }}/>
     </div>
   );
-
-  function copyAppUrl() {
-    navigator.clipboard.writeText(appUrl).catch(()=>{});
-    setCopied(true);
-    setTimeout(()=>setCopied(false), 1600);
-  }
 
   return (
     <Modal title="View App" onClose={onClose}>
@@ -681,13 +1250,10 @@ function ViewAppMenu({ appUrl, onClose }:{ appUrl:string; onClose:()=>void }) {
         </div>
 
         {tab==="web" && <div className="flex flex-col gap-3">
-          <div>
-            <label style={{ fontSize:10, fontWeight:600, color:"var(--muted-foreground)", letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:4 }}>App URL</label>
-            <div className="w-full rounded-lg px-3 py-2 text-xs" style={{ background:"var(--background)", border:"1px solid var(--border)", color:"var(--foreground)", fontFamily:"DM Mono,monospace" }}>{appUrl}</div>
-          </div>
+          {field("App URL","https://myapp.lotus.app")}
           <div className="flex gap-2 mt-1">
-            <button onClick={()=>window.open(appUrl, "_blank", "noopener,noreferrer")} className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background:"var(--primary)", color:"var(--primary-foreground)" }}>Open Web App</button>
-            <button onClick={copyAppUrl} className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>{copied?"Copied":"Copy Link"}</button>
+            <button className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background:"var(--primary)", color:"var(--primary-foreground)" }}>Open Web App</button>
+            <button className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>Copy Link</button>
           </div>
         </div>}
 
@@ -756,9 +1322,8 @@ export default function App() {
   const [isTyping,  setIsTyping]  = useState(false);
   const [device,    setDevice]    = useState<DeviceMode>("phone");
   const [view,      setView]      = useState<BuildView>("preview");
+  const [preset,    setPreset]    = useState<PresetId>("wellness");
   const [liveFlash, setLiveFlash] = useState(false);
-  const [lastPrompt, setLastPrompt] = useState(DEFAULT_PROMPT);
-  const [styleSeed, setStyleSeed] = useState(()=>hashText(DEFAULT_PROMPT));
 
   // Data
   const [selectedModel,  setSelectedModel]  = useState("Enigma Auto");
@@ -771,48 +1336,54 @@ export default function App() {
   // UI open/close
   const [showPlus,      setShowPlus]      = useState(false);
   const [showModel,     setShowModel]     = useState(false);
+  const [showPreset,    setShowPreset]    = useState(false);
   const [showConnector, setShowConnector] = useState(false);
   const [showSkills,    setShowSkills]    = useState(false);
   const [showAgents,    setShowAgents]    = useState(false);
   const [showFunctions, setShowFunctions] = useState(false);
   const [showViewApp,   setShowViewApp]   = useState(false);
-  const [showProjects,  setShowProjects]  = useState(false);
 
   // Build state
   const [autosaved,    setAutosaved]    = useState(true);
-  const [buildStatus,  setBuildStatus]  = useState<BuildStatus>("Ready");
   const [dragKey,      setDragKey]      = useState(0); // reset phone position
-  const [history,      setHistory]      = useState<string[]>([DEFAULT_PROMPT]);
+  const [history,      setHistory]      = useState<string[]>(["Initial build"]);
   const [historyIdx,   setHistoryIdx]   = useState(0);
-  const [folders] = useState<ProjectFolder[]>(PROJECT_FOLDERS);
-  const [projects, setProjects] = useState<BuilderProject[]>(INIT_PROJECTS);
-  const [activeProjectId, setActiveProjectId] = useState(INIT_PROJECTS[0].id);
 
   const messagesEndRef  = useRef<HTMLDivElement>(null);
   const fileInputRef    = useRef<HTMLInputElement>(null);
   const imageInputRef   = useRef<HTMLInputElement>(null);
   const canvasRef       = useRef<HTMLDivElement>(null);
-  const stylePack = useMemo(()=>createStylePack(styleSeed), [styleSeed]);
-  const generatedSpec = useMemo(()=>generateAppSpec(lastPrompt, stylePack), [lastPrompt, stylePack]);
-  const codeFiles = useMemo(()=>generateCodeFiles(generatedSpec, stylePack, lastPrompt), [generatedSpec, stylePack, lastPrompt]);
-  const appUrl = useMemo(()=>`https://preview.lotus.app/${generatedSpec.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "generated-app"}`, [generatedSpec.title]);
-  const activeProject = projects.find(p=>p.id===activeProjectId) || projects[0];
-  const activeFolder = folders.find(f=>f.id===activeProject?.folderId) || folders[0];
+  const presetMenuRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [messages, isTyping]);
 
-  // Instant live preview - generate a style pack from typed input
+  // Instant live preview — detect preset from typed input
   useEffect(() => {
     if (!input.trim()) return;
     const timer = setTimeout(() => {
-      setStyleSeed(hashText(input));
-      setLiveFlash(true);
-      setTimeout(() => setLiveFlash(false), 800);
+      const detected = detectPreset(input);
+      if (detected && detected !== preset) {
+        setPreset(detected);
+        setLiveFlash(true);
+        setTimeout(() => setLiveFlash(false), 800);
+      }
     }, 320);
     return () => clearTimeout(timer);
-  }, [input]);
+  }, [input, preset]);
+
+  // Close preset menu on outside click
+  useEffect(() => {
+    if (!showPreset) return;
+    function handler(e: MouseEvent) {
+      if (presetMenuRef.current && !presetMenuRef.current.contains(e.target as Node)) {
+        setShowPreset(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showPreset]);
 
   // Counts for context bar
   const activeConnectors  = connectors.filter(c=>c.connected).length;
@@ -820,176 +1391,21 @@ export default function App() {
   const activeAgents      = agents.filter(a=>a.on).length;
   const activeCaps        = capabilities.filter(c=>c.active).length;
 
-  function writeProject(update: Partial<BuilderProject>, projectId = activeProjectId) {
-    setProjects(p=>p.map(project=>project.id===projectId ? { ...project, ...update, updatedAt:new Date() } : project));
-  }
-
-  function markDirty(status: BuildStatus = "Preview updated") {
-    setAutosaved(false);
-    setBuildStatus(status);
-  }
-
-  function saveProject() {
-    const now = new Date();
-    setProjects(p=>p.map(project=>project.id===activeProjectId ? {
-      ...project,
-      prompt:lastPrompt,
-      styleSeed,
-      updatedAt:now,
-      savedAt:now,
-    } : project));
-    setAutosaved(true);
-    setBuildStatus("Saved");
-    setTimeout(()=>setBuildStatus("Ready"), 1000);
-  }
-
-  function openProject(id: string) {
-    const project = projects.find(p=>p.id===id);
-    if (!project) return;
-    setActiveProjectId(id);
-    setLastPrompt(project.prompt);
-    setStyleSeed(project.styleSeed);
-    setHistory([project.prompt]);
-    setHistoryIdx(0);
-    setView("preview");
-    setAutosaved(true);
-    setBuildStatus("Ready");
-    setShowProjects(false);
-  }
-
-  function createProject() {
-    const id = `proj-${Date.now()}`;
-    const prompt = "Build a new app with onboarding, dashboard, profile, settings, notifications, and export-ready code.";
-    const now = new Date();
-    const project: BuilderProject = {
-      id,
-      name:`Untitled App ${projects.length + 1}`,
-      folderId:"experiments",
-      prompt,
-      styleSeed:hashText(`${prompt}-${id}`),
-      updatedAt:now,
-      savedAt:now,
-    };
-    setProjects(p=>[project, ...p]);
-    setActiveProjectId(id);
-    setLastPrompt(project.prompt);
-    setStyleSeed(project.styleSeed);
-    setHistory([project.prompt]);
-    setHistoryIdx(0);
-    setView("preview");
-    setAutosaved(true);
-    setBuildStatus("Ready");
-  }
-
-  function duplicateProject(id: string) {
-    const source = projects.find(p=>p.id===id);
-    if (!source) return;
-    const now = new Date();
-    const copy: BuilderProject = {
-      ...source,
-      id:`proj-${Date.now()}`,
-      name:`${source.name} Copy`,
-      updatedAt:now,
-      savedAt:now,
-      pinned:false,
-    };
-    setProjects(p=>[copy, ...p]);
-    setActiveProjectId(copy.id);
-    setLastPrompt(copy.prompt);
-    setStyleSeed(copy.styleSeed);
-    setHistory([copy.prompt]);
-    setHistoryIdx(0);
-    setView("preview");
-    setAutosaved(true);
-    setBuildStatus("Ready");
-  }
-
-  function deleteProject(id: string) {
-    if (projects.length===1) return;
-    const remaining = projects.filter(p=>p.id!==id);
-    setProjects(remaining);
-    if (id===activeProjectId) {
-      const next = remaining[0];
-      setActiveProjectId(next.id);
-      setLastPrompt(next.prompt);
-      setStyleSeed(next.styleSeed);
-      setHistory([next.prompt]);
-      setHistoryIdx(0);
-      setAutosaved(true);
-    }
-  }
-
-  function renameProject(id: string, name: string) {
-    writeProject({ name }, id);
-    setBuildStatus("Project renamed");
-    setTimeout(()=>setBuildStatus("Ready"), 1000);
-  }
-
-  function moveProject(id: string, folderId: string) {
-    writeProject({ folderId }, id);
-    setBuildStatus("Project moved");
-    setTimeout(()=>setBuildStatus("Ready"), 1000);
-  }
-
-  useEffect(() => {
-    if (!activeProject) return;
-    if (activeProject.prompt===lastPrompt && activeProject.styleSeed===styleSeed) return;
-    setAutosaved(false);
-    const timer = setTimeout(() => {
-      const now = new Date();
-      setProjects(p=>p.map(project=>project.id===activeProjectId ? {
-        ...project,
-        prompt:lastPrompt,
-        styleSeed,
-        updatedAt:now,
-        savedAt:now,
-      } : project));
-      setAutosaved(true);
-      setBuildStatus(current=>current==="Generating" ? current : "Autosaved");
-      setTimeout(()=>setBuildStatus(current=>current==="Autosaved" ? "Ready" : current), 900);
-    }, 700);
-    return () => clearTimeout(timer);
-  }, [lastPrompt, styleSeed, activeProjectId]);
-
-  function restoreHistory(nextIdx: number) {
-    const prompt = history[nextIdx];
-    if (!prompt) return;
-    setHistoryIdx(nextIdx);
-    setLastPrompt(prompt);
-    setInput("");
-    setStyleSeed(hashText(prompt));
-    setView("preview");
-    markDirty("Preview updated");
-    setLiveFlash(true);
-    setTimeout(()=>setLiveFlash(false), 800);
-  }
-
-  function regeneratePreview() {
-    const nextSeed = hashText(`${lastPrompt}-${Date.now()}`);
-    setStyleSeed(nextSeed);
-    markDirty("Preview updated");
-    setLiveFlash(true);
-    setTimeout(()=>setLiveFlash(false), 800);
-  }
-
   function handleSend(text = input.trim()) {
     if (!text) return;
     const id = Date.now().toString();
     setMessages(p=>[...p,{ id, role:"user", content:text, ts:new Date() }]);
     setInput("");
     setIsTyping(true);
-    markDirty("Generating");
-    setLastPrompt(text);
-    setView("preview");
+    setAutosaved(false);
     setTimeout(()=>{
       setIsTyping(false);
-      setMessages(p=>[...p,{ id:(Date.now()+1).toString(), role:"assistant", content:`Generated ${generateAppSpec(text, createStylePack(hashText(text))).title} with a new UI asset pack.`, ts:new Date() }]);
+      setMessages(p=>[...p,{ id:(Date.now()+1).toString(), role:"assistant", content:"Got it — applying your changes to the preview.", ts:new Date() }]);
       setHistory(h=>[...h.slice(0,historyIdx+1), text]);
-      setStyleSeed(hashText(text));
-      setLiveFlash(true);
-      setTimeout(()=>setLiveFlash(false), 800);
+      const detected = detectPreset(text);
+      if (detected) { setPreset(detected); setLiveFlash(true); setTimeout(()=>setLiveFlash(false), 800); }
       setHistoryIdx(i=>i+1);
-      setBuildStatus("Preview updated");
+      setTimeout(()=>setAutosaved(true), 800);
     }, 2000);
   }
 
@@ -1007,27 +1423,11 @@ export default function App() {
   function toggleAgent(id:string)     { setAgents(p=>p.map(a=>a.id===id?{...a,on:!a.on}:a)); }
   function toggleCap(id:string)       { setCapabilities(p=>p.map(c=>c.id===id?{...c,active:!c.active}:c)); }
 
-  function handlePlusAction(label: string) {
-    setShowPlus(false);
-    if (label==="Upload File") fileInputRef.current?.click();
-    else if (label==="Upload Image") imageInputRef.current?.click();
-    else if (label==="Add Connector") setShowConnector(true);
-    else if (label==="Add Skill") setShowSkills(true);
-    else if (label==="Add Agent") setShowAgents(true);
-    else if (label==="Add Function" || label==="Add Device Capability") setShowFunctions(true);
-    else if (label==="Import Design") handleSend("Import a design reference and generate matching screens, components, and styling.");
-    else if (label==="Import GitHub Repo") handleSend("Import a GitHub repo and generate an app preview, route map, and code export plan.");
-    else if (label==="Add API Key") setShowConnector(true);
-  }
-
   const quickActions = [
     { label:"Generate Plan",       text:"Generate a full product plan for this app." },
     { label:"Fix Bugs",            text:"Review the current code and fix any bugs." },
     { label:"Improve UI",          text:"Improve the visual design and polish the UI." },
     { label:"Prepare Store Build", text:"Prepare everything needed for an App Store submission." },
-    { label:"Add Auth Flow",       text:"Add login, signup, onboarding, profile, and protected app screens." },
-    { label:"Add Commerce Kit",    text:"Add product, cart, checkout, order history, and payment screens." },
-    { label:"Add Admin Screens",   text:"Add dashboard, users, reports, settings, and activity screens." },
   ];
 
   const toolbarBtns: { icon:React.ReactNode; label:string; onClick:()=>void; active?:boolean }[] = [
@@ -1050,15 +1450,6 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           <img src={logoLotus} alt="Lotus" style={{ width:50, height:50, objectFit:"contain" }}/>
           <span style={{ fontFamily:"Fraunces,serif", fontWeight:500, fontSize:21, color:"var(--foreground)", letterSpacing:"-0.02em" }}>Lotus</span>
-          <button onClick={()=>setShowProjects(true)}
-            className="hidden md:flex items-center gap-2 min-w-0 px-3 py-2 rounded-xl text-left transition-all hover:opacity-80"
-            style={{ background:"var(--background)", border:"1px solid var(--border)", maxWidth:260 }}>
-            <FolderOpen size={13} style={{ color:activeFolder.color }}/>
-            <span className="min-w-0">
-              <span className="block truncate" style={{ fontSize:12, fontWeight:700, color:"var(--foreground)" }}>{activeProject?.name}</span>
-              <span className="block truncate" style={{ fontSize:9, color:"var(--muted-foreground)" }}>{activeFolder.name} · Recent Project</span>
-            </span>
-          </button>
         </div>
 
         {/* Device switcher */}
@@ -1081,37 +1472,22 @@ export default function App() {
         <div className="flex items-center gap-2">
           {/* Undo/Redo */}
           <div className="flex items-center gap-0.5">
-            <button onClick={()=>restoreHistory(Math.max(0,historyIdx-1))} disabled={historyIdx===0}
+            <button onClick={()=>setHistoryIdx(i=>Math.max(0,i-1))} disabled={historyIdx===0}
               className="p-1.5 rounded-lg transition-all hover:opacity-80" style={{ color:historyIdx===0?"var(--muted-foreground)":"var(--foreground)", opacity:historyIdx===0?0.4:1 }}>
               <Undo2 size={13}/>
             </button>
-            <button onClick={()=>restoreHistory(Math.min(history.length-1,historyIdx+1))} disabled={historyIdx===history.length-1}
+            <button onClick={()=>setHistoryIdx(i=>Math.min(history.length-1,i+1))} disabled={historyIdx===history.length-1}
               className="p-1.5 rounded-lg transition-all hover:opacity-80" style={{ color:historyIdx===history.length-1?"var(--muted-foreground)":"var(--foreground)", opacity:historyIdx===history.length-1?0.4:1 }}>
               <Redo2 size={13}/>
             </button>
           </div>
           <div className="h-4 w-px mx-1" style={{ background:"var(--border)" }}/>
-          <button onClick={()=>setShowProjects(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-            style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
-            <FolderOpen size={11}/> Projects
-          </button>
-          <button onClick={saveProject}
-            className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-            style={{ background:autosaved?"var(--secondary)":"var(--primary)", color:autosaved?"var(--secondary-foreground)":"var(--primary-foreground)", border:"1px solid var(--border)" }}>
-            <Save size={11}/> Save
-          </button>
           <button onClick={()=>setShowViewApp(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
             style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
             <Eye size={11}/> View App
           </button>
-          <button onClick={()=>setView("code")}
-            className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-            style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
-            <Code2 size={11}/> Code
-          </button>
-          <motion.button whileTap={{ scale:0.97 }} onClick={()=>{ setBuildStatus("Deploy queued"); setView("deployed"); }}
+          <motion.button whileTap={{ scale:0.97 }}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold"
             style={{ background:"linear-gradient(135deg,#D4A030,#B87820)", color:"#FFF8E8", boxShadow:"0 2px 12px rgba(200,146,42,0.35)" }}>
             <Zap size={11}/> Deploy
@@ -1204,7 +1580,7 @@ export default function App() {
                       initial={{ opacity:0, y:6, scale:0.97 }} animate={{ opacity:1, y:0, scale:1 }} exit={{ opacity:0, y:4, scale:0.97 }}
                       transition={{ duration:0.18 }}>
                       {PLUS_ITEMS.map(item=>(
-                        <button key={item.label} onClick={()=>handlePlusAction(item.label)}
+                        <button key={item.label} onClick={()=>setShowPlus(false)}
                           className="flex items-center gap-2.5 w-full px-3.5 py-2 text-left transition-colors hover:opacity-80"
                           style={{ fontSize:12, color:"var(--foreground)", fontWeight:400 }}>
                           <span style={{ color:"var(--accent)" }}>{item.icon}</span>{item.label}
@@ -1286,98 +1662,76 @@ export default function App() {
           {/* Preview toolbar */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-2" style={{ borderBottom:"1px solid var(--border)", background:"var(--card)" }}>
             {/* View tabs */}
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background:"var(--muted)" }}>
-                {([["preview","Preview",<Eye size={11}/>],["code","Code",<Code2 size={11}/>],["deployed","Deployed",<Zap size={11}/>]] as const).map(([k,l,icon])=>(
-                  <button key={k} onClick={()=>setView(k as BuildView)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                    style={{ background:view===k?"var(--card)":"transparent", color:view===k?"var(--foreground)":"var(--muted-foreground)", boxShadow:view===k?"0 1px 4px rgba(0,0,0,0.08)":"none" }}>
-                    {icon}{l}
-                  </button>
-                ))}
-              </div>
-              <div className="hidden md:flex items-center gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background:buildStatus==="Generating"?"var(--accent)":"#6BCB77" }}/>
-                <span className="truncate" style={{ fontSize:11, color:"var(--muted-foreground)" }}>
-                  {activeProject?.name} - {generatedSpec.title} - Pack {stylePack.id + 1}/{STYLE_PACK_COUNT} - {DEVICE_PREVIEW_META[device].note}
-                </span>
-              </div>
+            <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background:"var(--muted)" }}>
+              {([["preview","Preview",<Eye size={11}/>],["code","Code",<Code2 size={11}/>],["deployed","Deployed",<Zap size={11}/>]] as const).map(([k,l,icon])=>(
+                <button key={k} onClick={()=>setView(k as BuildView)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  style={{ background:view===k?"var(--card)":"transparent", color:view===k?"var(--foreground)":"var(--muted-foreground)", boxShadow:view===k?"0 1px 4px rgba(0,0,0,0.08)":"none" }}>
+                  {icon}{l}
+                </button>
+              ))}
             </div>
 
             {/* Right controls */}
             <div className="flex items-center gap-2">
               {view==="preview" && <>
+                {/* Preset picker dropdown */}
+                <div className="relative" ref={presetMenuRef}>
+                  <motion.button whileTap={{ scale:0.96 }}
+                    onClick={()=>setShowPreset(v=>!v)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={{ background:showPreset?"var(--card)":"var(--muted)", color:"var(--foreground)", border:"1px solid var(--border)" }}>
+                    <AnimatePresence mode="wait">
+                      {liveFlash ? (
+                        <motion.span key="live" initial={{ opacity:0, scale:0.7 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0 }}
+                          className="flex items-center gap-1">
+                          <motion.div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background:"var(--accent)" }} animate={{ scale:[1,1.5,1] }} transition={{ duration:0.35, repeat:2 }}/>
+                          <span style={{ color:"var(--accent)", fontSize:9, fontWeight:700, letterSpacing:"0.05em" }}>LIVE</span>
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
+                    <span style={{ fontSize:13 }}>{PRESETS.find(p=>p.id===preset)?.emoji}</span>
+                    <span>{PRESETS.find(p=>p.id===preset)?.label}</span>
+                    <ChevronDown size={10} style={{ opacity:0.5 }}/>
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {showPreset && (
+                      <motion.div initial={{ opacity:0, y:-6, scale:0.97 }} animate={{ opacity:1, y:0, scale:1 }} exit={{ opacity:0, y:-4, scale:0.97 }}
+                        transition={{ duration:0.15 }}
+                        className="absolute right-0 top-full mt-1.5 rounded-2xl overflow-hidden z-50"
+                        style={{ background:"var(--card)", border:"1px solid var(--border)", boxShadow:"0 8px 32px rgba(0,0,0,0.13)", minWidth:172 }}>
+                        <div className="p-1.5">
+                          {PRESETS.map(p=>(
+                            <motion.button key={p.id} whileTap={{ scale:0.97 }}
+                              onClick={()=>{ setPreset(p.id); setLiveFlash(true); setTimeout(()=>setLiveFlash(false),800); setShowPreset(false); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left"
+                              style={{
+                                background: preset===p.id ? p.accent : "transparent",
+                                color: preset===p.id ? "#fff" : "var(--foreground)",
+                              }}>
+                              <span style={{ fontSize:14, lineHeight:1 }}>{p.emoji}</span>
+                              <span>{p.label}</span>
+                              {preset===p.id && <Check size={10} style={{ marginLeft:"auto", opacity:0.8 }}/>}
+                            </motion.button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 <button onClick={()=>setDragKey(k=>k+1)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-all hover:opacity-80"
                   style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>
-                  <RotateCcw size={10}/> Reset Position
+                  <RotateCcw size={10}/> Reset
                 </button>
-                <button onClick={regeneratePreview} className="p-1.5 rounded-lg transition-colors hover:opacity-70" style={{ color:"var(--muted-foreground)" }}><RefreshCw size={12}/></button>
+                <button className="p-1.5 rounded-lg transition-colors hover:opacity-70" style={{ color:"var(--muted-foreground)" }}><RefreshCw size={12}/></button>
               </>}
-              <button onClick={()=>setShowViewApp(true)}
-                className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
-                style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
-                <Globe size={10}/> View App
-              </button>
-              <button onClick={()=>setShowFunctions(true)} className="p-1.5 rounded-lg transition-colors hover:opacity-70" style={{ color:"var(--muted-foreground)" }}><MoreHorizontal size={12}/></button>
+              <button className="p-1.5 rounded-lg transition-colors hover:opacity-70" style={{ color:"var(--muted-foreground)" }}><MoreHorizontal size={12}/></button>
             </div>
           </div>
 
-          {/* Generator controls */}
-          {view==="preview" && (
-            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--border)", scrollbarWidth:"none" }}>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {/* Live flash indicator */}
-                <AnimatePresence>
-                  {liveFlash && (
-                    <motion.div initial={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0 }}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{ background:"rgba(200,146,42,0.15)", border:"1px solid rgba(200,146,42,0.3)" }}>
-                      <motion.div className="w-1.5 h-1.5 rounded-full" style={{ background:"var(--accent)" }} animate={{ scale:[1,1.4,1] }} transition={{ duration:0.4, repeat:2 }}/>
-                      <span style={{ fontSize:9, color:"var(--accent)", fontWeight:700, letterSpacing:"0.05em" }}>LIVE</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full flex-shrink-0" style={{ background:"var(--primary)", color:"var(--primary-foreground)" }}>
-                <Sparkles size={11}/>
-                <span style={{ fontSize:11, fontWeight:800 }}>Real Generator</span>
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0" style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>
-                <span style={{ width:10, height:10, borderRadius:3, background:stylePack.palette.accent }}/>
-                <span style={{ fontSize:11, fontWeight:700 }}>Pack {stylePack.id + 1}/{STYLE_PACK_COUNT}</span>
-              </div>
-              {[stylePack.archetype, stylePack.layout, stylePack.texture, stylePack.density].map(item=>(
-                <span key={item} className="px-3 py-1.5 rounded-full flex-shrink-0" style={{ background:"var(--muted)", color:"var(--muted-foreground)", fontSize:11, fontWeight:650 }}>
-                  {item}
-                </span>
-              ))}
-              <motion.button whileTap={{ scale:0.95 }}
-                onClick={()=>{ setStyleSeed(s=>s+1); markDirty("Preview updated"); setLiveFlash(true); setTimeout(()=>setLiveFlash(false),900); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0 transition-all text-xs font-semibold"
-                style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
-                <RefreshCw size={11}/> Next Pack
-              </motion.button>
-              <motion.button whileTap={{ scale:0.95 }}
-                onClick={()=>{ setStyleSeed(Math.floor(Math.random()*STYLE_PACK_COUNT)); markDirty("Preview updated"); setLiveFlash(true); setTimeout(()=>setLiveFlash(false),900); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0 transition-all text-xs font-semibold"
-                style={{ background:"linear-gradient(135deg,#D4A030,#B87820)", color:"#FFF8E8", boxShadow:"0 2px 10px rgba(200,146,42,0.3)" }}>
-                <Zap size={11}/> Shuffle Style
-              </motion.button>
-              <motion.button whileTap={{ scale:0.95 }}
-                onClick={()=>handleSend("Add login, onboarding, settings, billing, notifications, and admin screens to this generated app.")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0 transition-all text-xs font-semibold"
-                style={{ background:"var(--secondary)", color:"var(--secondary-foreground)", border:"1px solid var(--border)" }}>
-                <Plus size={11}/> Add Screen Pack
-              </motion.button>
-              <motion.button whileTap={{ scale:0.95 }}
-                onClick={()=>setView("code")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0 transition-all text-xs font-semibold"
-                style={{ background:"var(--muted)", color:"var(--muted-foreground)" }}>
-                <Archive size={11}/> Export Code
-              </motion.button>
-            </div>
-          )}
 
           {/* View content */}
           {view==="preview" && (
@@ -1386,9 +1740,8 @@ export default function App() {
               backgroundSize:"22px 22px",
             }}>
               <div className="absolute inset-0 pointer-events-none" style={{ background:"radial-gradient(ellipse at center, transparent 55%, rgba(245,237,216,0.65) 100%)" }}/>
-              <PreviewBrief spec={generatedSpec} stylePack={stylePack} device={device} selectedModel={selectedModel} buildStatus={buildStatus} lastPrompt={lastPrompt}/>
               <AnimatePresence mode="wait">
-                <motion.div key={`${device}-${stylePack.id}-${lastPrompt}-${dragKey}`}
+                <motion.div key={`${device}-${preset}-${dragKey}`}
                   className="absolute inset-0 flex items-center justify-center"
                   initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
                   transition={{ duration:0.2 }}>
@@ -1396,38 +1749,42 @@ export default function App() {
                     className="cursor-grab active:cursor-grabbing relative"
                     initial={{ scale:0.95, y:12 }} animate={{ scale:1, y:0 }}
                     transition={{ duration:0.3, ease:[0.22,1,0.36,1] }}>
-                    <DraggableGeneratedPreview device={device} spec={generatedSpec} stylePack={stylePack}/>
+                    {/* Grab affordance */}
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full pointer-events-none" style={{ background:"rgba(44,34,20,0.08)" }}>
+                      <GripVertical size={10} style={{ color:"var(--muted-foreground)" }}/>
+                      <span style={{ fontSize:9, color:"var(--muted-foreground)", fontWeight:500 }}>Drag</span>
+                    </div>
+                    <DeviceFrame device={device}>
+                      <MockPreview device={device} preset={preset}/>
+                    </DeviceFrame>
                   </motion.div>
                 </motion.div>
               </AnimatePresence>
             </div>
           )}
 
-          {view==="code" && <CodePanel files={codeFiles} appTitle={generatedSpec.title}/>}
-          {view==="deployed" && <DeployedPanel onViewApp={()=>setShowViewApp(true)} onCode={()=>setView("code")}/>}
+          {view==="code" && <CodePanel/>}
+          {view==="deployed" && <DeployedPanel/>}
 
           {/* Active build context bar */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-1.5" style={{ borderTop:"1px solid var(--border)", background:"var(--card)" }}>
             <div className="flex items-center gap-2 flex-wrap">
-              <span style={{ fontFamily:"DM Mono,monospace", fontSize:9, color:activeFolder.color, fontWeight:700 }}>{activeFolder.name}</span>
-              <span style={{ fontFamily:"DM Mono,monospace", fontSize:9, color:"var(--muted-foreground)" }}>· {activeProject?.name}</span>
               <span style={{ fontFamily:"DM Mono,monospace", fontSize:9, color:"var(--accent)", fontWeight:600 }}>{selectedModel}</span>
-              <span style={{ fontSize:9, color:"var(--muted-foreground)", fontFamily:"DM Mono,monospace" }}>· {buildStatus}</span>
               {[
                 { count:activeConnectors, label:"Connector" },
                 { count:activeSkills,     label:"Skill" },
                 { count:activeAgents,     label:"Agent" },
-                { count:activeCaps,       label:"Capability", plural:"Capabilities" },
+                { count:activeCaps,       label:"Capability" },
                 { count:uploadedFiles.length, label:"File" },
               ].map(item=>(
                 item.count>0 && <span key={item.label} style={{ fontSize:9, color:"var(--muted-foreground)", fontFamily:"DM Mono,monospace" }}>
-                  · {item.count} {item.count!==1 && "plural" in item ? item.plural : `${item.label}${item.count!==1?"s":""}`}
+                  · {item.count} {item.label}{item.count!==1?"s":""}
                 </span>
               ))}
             </div>
             <div className="flex items-center gap-1.5">
               {autosaved
-                ? <><div className="w-1.5 h-1.5 rounded-full" style={{ background:"#6BCB77" }}/><span style={{ fontSize:9, color:"var(--muted-foreground)" }}>Autosaved {activeProject ? compactTime(activeProject.savedAt) : ""}</span></>
+                ? <><div className="w-1.5 h-1.5 rounded-full" style={{ background:"#6BCB77" }}/><span style={{ fontSize:9, color:"var(--muted-foreground)" }}>Saved</span></>
                 : <><motion.div className="w-1.5 h-1.5 rounded-full" style={{ background:"var(--accent)" }} animate={{ opacity:[1,0.3,1] }} transition={{ duration:1, repeat:Infinity }}/><span style={{ fontSize:9, color:"var(--muted-foreground)" }}>Saving…</span></>
               }
               <span style={{ fontSize:9, color:"var(--muted-foreground)", marginLeft:6, fontFamily:"DM Mono,monospace" }}>
@@ -1444,20 +1801,7 @@ export default function App() {
         {showSkills    && <SkillsPanel    skills={skills}         onToggle={toggleSkill}     onClose={()=>setShowSkills(false)}/>}
         {showAgents    && <AgentsPanel    agents={agents}          onToggle={toggleAgent}     onClose={()=>setShowAgents(false)}/>}
         {showFunctions && <FunctionsPanel caps={capabilities}     onToggle={toggleCap}       onClose={()=>setShowFunctions(false)}/>}
-        {showViewApp   && <ViewAppMenu    appUrl={appUrl} onClose={()=>setShowViewApp(false)}/>}
-        {showProjects  && <ProjectsPanel
-          projects={projects}
-          folders={folders}
-          activeProjectId={activeProjectId}
-          onOpen={openProject}
-          onNew={createProject}
-          onDuplicate={duplicateProject}
-          onDelete={deleteProject}
-          onRename={renameProject}
-          onMove={moveProject}
-          onSave={saveProject}
-          onClose={()=>setShowProjects(false)}
-        />}
+        {showViewApp   && <ViewAppMenu    onClose={()=>setShowViewApp(false)}/>}
       </AnimatePresence>
 
       {/* Click-away to close popovers */}
